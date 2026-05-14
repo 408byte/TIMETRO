@@ -1,0 +1,89 @@
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* 設定字體 */
+    background-color: #f4f7f6; /* 背景色 */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh; /* 讓內容至少佔滿整個視窗高度 */
+    margin: 0;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.container {
+    background-color: #ffffff; /* 容器背景色 */
+    padding: 30px;
+    border-radius: 10px; /* 圓角 */
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); /* 陰影效果 */
+    width: 100%;
+    max-width: 500px; /* 最大寬度 */
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 25px;
+    font-size: 2em;
+}
+
+.form-group {
+    margin-bottom: 18px;
+}
+
+label {
+    display: block; /* 讓標籤獨佔一行 */
+    margin-bottom: 8px;
+    color: #555;
+    font-weight: bold;
+}
+
+input[type="date"],
+input[type="time"],
+input[type="text"],
+textarea {
+    width: calc(100% - 20px); /* 扣除 padding 寬度 */
+    padding: 12px 10px;
+    border: 1px solid #ced4da; /* 邊框 */
+    border-radius: 6px; /* 圓角 */
+    font-size: 1em;
+    color: #495057;
+    box-sizing: border-box; /* 確保 padding 不增加元素總寬度 */
+    transition: border-color 0.3s ease, box-shadow 0.3s ease; /* 過渡效果 */
+}
+
+input:focus,
+textarea:focus {
+    border-color: #80bdff; /* 聚焦時邊框顏色 */
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25); /* 聚焦時陰影 */
+    outline: none; /* 移除瀏覽器預設外框 */
+}
+
+textarea {
+    resize: vertical; /* 允許垂直調整大小 */
+}
+
+button[type="submit"] {
+    background-color: #007bff; /* 按鈕背景色 */
+    color: white;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1.1em;
+    width: 100%;
+    transition: background-color 0.3s ease; /* 過渡效果 */
+}
+
+button[type="submit"]:hover {
+    background-color: #0056b3; /* 鼠標懸停時的背景色 */
+}
+
+/* 響應式設計 */
+@media (max-width: 600px) {
+    .container {
+        padding: 20px;
+    }
+    h1 {
+        font-size: 1.8em;
+    }
+}
