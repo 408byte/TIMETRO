@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>行程輸入表單</title>
+    <link rel="stylesheet" href="style.css"> <!-- 引入 CSS 檔案 -->
+</head>
+<body>
+    <div class="container">
+        <h1>新增行程</h1>
+        <form action="#" method="post"> <!-- action 屬性通常指向後端處理的 URL -->
+            <div class="form-group">
+                <label for="date">日期:</label>
+                <input type="date" id="date" name="date" required>
+            </div>
+            <div class="form-group">
+                <label for="time">時間:</label>
+                <input type="time" id="time" name="time" required>
+            </div>
+            <div class="form-group">
+                <label for="content">行程內容:</label>
+                <input type="text" id="content" name="content" placeholder="輸入行程內容" required>
+            </div>
+            <div class="form-group">
+                <label for="note">備註:</label>
+                <textarea id="note" name="note" rows="4" placeholder="輸入備註 (選填)"></textarea>
+            </div>
+            <button type="submit">新增行程</button>
+        </form>
+    </div>
+</body>
+</html>
