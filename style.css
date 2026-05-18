@@ -87,3 +87,108 @@ button[type="submit"]:hover {
         font-size: 1.8em;
     }
 }
+
+/* --- 以下為新增加的查詢與列表樣式 --- */
+
+.divider {
+    margin: 30px 0;
+    border: 0;
+    border-top: 2px dashed #ced4da;
+}
+
+h2 {
+    color: #495057;
+    font-size: 1.5em;
+    margin-bottom: 15px;
+}
+
+.search-group {
+    display: flex;
+    gap: 10px; /* 讓輸入框和按鈕有間距 */
+    margin-bottom: 20px;
+}
+
+#searchInput {
+    flex: 1; /* 讓輸入框自動填滿剩餘空間 */
+    padding: 10px;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    font-size: 0.95em;
+}
+
+#searchBtn {
+    background-color: #28a745; /* 綠色搜尋按鈕 */
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.95em;
+    transition: background-color 0.2s;
+}
+
+#searchBtn:hover {
+    background-color: #218838;
+}
+
+#clearBtn {
+    background-color: #6c757d; /* 灰色清除按鈕 */
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.95em;
+    transition: background-color 0.2s;
+}
+
+#clearBtn:hover {
+    background-color: #5a6268;
+}
+
+.trip-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+/* 每一筆行程卡的樣式 */
+.trip-item {
+    background-color: #f8f9fa;
+    border-left: 5px solid #007bff; /* 左側藍色條 */
+    padding: 15px;
+    margin-bottom: 12px;
+    border-radius: 0 6px 6px 0;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.trip-item-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85em;
+    color: #6c757d;
+    margin-bottom: 5px;
+}
+
+.trip-item-content {
+    font-size: 1.1em;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 5px;
+}
+
+.trip-item-note {
+    font-size: 0.9em;
+    color: #666;
+    background: #eef1f5;
+    padding: 6px 10px;
+    border-radius: 4px;
+    margin-top: 5px;
+}
+
+.no-result {
+    text-align: center;
+    color: #999;
+    font-style: italic;
+    padding: 20px 0;
+}
