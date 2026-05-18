@@ -36,7 +36,7 @@ def main():
                 continue
             try:
                 index = int(input("🔢 請輸入要附加照片的行程編號: "))
-                photo_path = input("🔗 請輸入照片檔案路徑 (例如 pic.jpg): ").strip("C:\Users\user\OneDrive\桌面\𝐍𝐂𝐔\114第二學期(大三下)\教育部海外研習申請\簡報照片\背景-3.jpg")
+                photo_path = input("🔗 請輸入照片檔案路徑 (例如 pic.jpg): ").strip()
                 task_manager.add_photo_to_task(tasks, index, photo_path)
             except ValueError:
                 print("❌ 編號請輸入有效的數字。")
