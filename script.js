@@ -1,3 +1,5 @@
+const API_URL = "http://127.0.0.1:5000/api/tasks";
+
 // ====== 1. 元素綁定 ======
 const tripForm = document.querySelector('form');
 const tripList = document.getElementById('tripList');
@@ -5,99 +7,115 @@ const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
 const clearBtn = document.getElementById('clearBtn');
 
+// 全域變數：儲存從後端抓下來的所有行程
+let allTasks = []; 
+
 // ====== 2. 初始化動作 ======
-// 當網頁一打開，自動把之前存好的行程顯示出來
 document.addEventListener('DOMContentLoaded', () => {
-    displayTrips();
+    fetchTasks();         // 從 Python 後端抓取資料
+    startReminderClock(); // 啟動前端計時提醒鬧鐘
 });
 
-// ====== 3. 監聽事件 ======
+// ====== 3. 功能函式 ======
 
-// 監聽「新增行程」表單送出
-tripForm.addEventListener('submit', function (event) {
-    event.preventDefault();
-
-    const date = document.getElementById('date').value;
-    const time = document.getElementById('time').value;
-    const content = document.getElementById('content').value;
-    const note = document.getElementById('note').value;
-
-    const newTrip = {
-        id: Date.now(),
-        date: date,
-        time: time,
-        content: content,
-        note: note
-    };
-
-    saveTripToLocalStorage(newTrip);
-    tripForm.reset(); 
-    
-    // 新增成功後，立刻重新整理下方的列表顯示
-    displayTrips();
-});
-
-// 監聽「搜尋」按鈕點擊
-searchBtn.addEventListener('click', () => {
-    const keyword = searchInput.value.trim();
-    displayTrips(keyword); // 傳入關鍵字進行過濾
-});
-
-// 監聽輸入框按下 Enter 鍵也能搜尋
-searchInput.addEventListener('keypress', (event) => {
-    if (event.key === 'Enter') {
-        const keyword = searchInput.value.trim();
-        displayTrips(keyword);
-    }
-});
-
-// 監聽「清除關鍵字」按鈕
-clearBtn.addEventListener('click', () => {
-    searchInput.value = ''; // 清空輸入框
-    displayTrips(); // 顯示全部行程
-});
-
-
-// ====== 4. 功能函式 (Functions) ======
-
-// 【儲存資料】
-function saveTripToLocalStorage(trip) {
-    let trips = JSON.parse(localStorage.getItem('myTrips')) || [];
-    trips.push(trip);
-    localStorage.setItem('myTrips', JSON.stringify(trips));
+// 【從後端撈取所有行程】
+function fetchTasks() {
+    fetch(API_URL)
+        .then(res => {
+            if (!res.ok) throw new Error('無法取得後端資料');
+            return res.json();
+        })
+        .then(data => {
+            allTasks = data; // 更新全域陣列
+            displayTrips();  // 渲染到網頁畫面上
+        })
+        .catch(err => console.error("連線到 Python 後端失敗:", err));
 }
 
-// 【顯示與查詢行程】
-// 參數 keyword 預設是空字串，代表顯示全部。如果有傳入字串，就會進行過濾。
+// 【向後端發送新增行程】
+tripForm.addEventListener('submit', function (event) {
+    event.preventDefault(); // 阻止表單預設跳頁行為
+
+    // 抓取網頁上輸入的值
+    const taskData = {
+        date: document.getElementById('date').value,
+        time: document.getElementById('time').value,
+        content: document.getElementById('content').value,
+        note: document.getElementById('note').value
+    };
+
+    // 發送 POST 請求給 Python Flask
+    fetch(API_URL, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify(taskData)
+    })
+    .then(res => {
+        if (!res.ok) throw new Error('伺服器回應錯誤');
+        return res.json();
+    })
+    .then(data => {
+        alert(`🎉 行程新增成功！\n內容：${taskData.content}`);
+        tripForm.reset(); // 清空輸入框
+        fetchTasks();     // 🌟 核心：立刻重新撈取後端最新資料，刷新網頁下方的列表
+    })
+    .catch(err => {
+        console.error("新增失敗:", err);
+        alert("新增失敗，請確認你的 Python 後端程式是否有正常啟動！");
+    });
+});
+
+// ====== 4. 前端即時提醒功能 ======
+function startReminderClock() {
+    // 每 10 秒自動比對一次時間
+    setInterval(() => {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const date = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        
+        const currentTimeString = `${year}-${month}-${date} ${hours}:${minutes}`;
+
+        allTasks.forEach(task => {
+            const taskTimeString = `${task.date} ${task.time}`;
+
+            // 如果時間到了，且在本次網頁開啟期間內尚未在前端提醒過
+            if (currentTimeString >= taskTimeString && !task.remindedByJS) {
+                task.remindedByJS = true; // 標記為已提醒，避免重複跳視窗
+                alert(`🔔 【TIMETRO 提醒通知】\n行程：${task.content}\n時間到了，該開始囉！`);
+            }
+        });
+    }, 10000); 
+}
+
+// ====== 5. 畫面渲染與查詢功能 ======
 function displayTrips(keyword = "") {
-    // 先清空目前畫面上顯示的列表，避免重複疊加
-    tripList.innerHTML = "";
+    tripList.innerHTML = ""; // 先清空舊列表
+    let filteredTrips = [...allTasks];
 
-    // 從 LocalStorage 撈出所有行程
-    let trips = JSON.parse(localStorage.getItem('myTrips')) || [];
+    // 依時間由近到遠排序
+    filteredTrips.sort((a, b) => new Date(`${a.date} ${a.time}`) - new Date(`${b.date} ${b.time}`));
 
-    // 依照日期與時間排序（讓接近的行程排在前面）
-    trips.sort((a, b) => new Date(`${a.date} ${a.time}`) - new Date(`${b.date} ${b.time}`));
-
-    // 如果有輸入關鍵字，就進行過濾（搜尋「行程內容」或「備註」）
+    // 如果有輸入關鍵字，過濾內容與備註
     if (keyword !== "") {
-        trips = trips.filter(trip => 
-            trip.content.toLowerCase().includes(keyword.toLowerCase()) || 
-            trip.note.toLowerCase().includes(keyword.toLowerCase())
+        filteredTrips = filteredTrips.filter(t => 
+            (t.content && t.content.toLowerCase().includes(keyword.toLowerCase())) || 
+            (t.note && t.note.toLowerCase().includes(keyword.toLowerCase()))
         );
     }
 
-    // 如果完全沒有行程（或搜尋不到結果）
-    if (trips.length === 0) {
+    if (filteredTrips.length === 0) {
         tripList.innerHTML = `<li class="no-result">沒有找到任何行程記錄 📭</li>`;
         return;
     }
 
-    // 將篩選後的每一筆行程，組合好 HTML 渲染到網頁上
-    trips.forEach(trip => {
-        // 檢查有沒有備註，有才顯示備註區塊
+    // 將資料轉為 HTML 元件並塞入網頁
+    filteredTrips.forEach(trip => {
         const noteHTML = trip.note ? `<div class="trip-item-note">💡 備註: ${trip.note}</div>` : '';
-
         const li = document.createElement('li');
         li.className = 'trip-item';
         li.innerHTML = `
@@ -111,3 +129,7 @@ function displayTrips(keyword = "") {
         tripList.appendChild(li);
     });
 }
+
+// 查詢與清除按鈕的監聽
+searchBtn.addEventListener('click', () => displayTrips(searchInput.value.trim()));
+clearBtn.addEventListener('click', () => { searchInput.value = ''; displayTrips(); });
