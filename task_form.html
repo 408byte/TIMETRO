@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>行程輸入表單</title>
+    <title>行程管理系統</title>
     <link rel="stylesheet" href="style.css"> <!-- 引入 CSS 檔案 -->
 </head>
 <body>
     <div class="container">
         <h1>新增行程</h1>
-        <form action="#" method="post"> <!-- action 屬性通常指向後端處理的 URL -->
+        <form action="#" method="post"> 
             <div class="form-group">
                 <label for="date">日期:</label>
                 <input type="date" id="date" name="date" required>
@@ -28,7 +28,28 @@
             </div>
             <button type="submit">新增行程</button>
         </form>
+
+        <hr class="divider"> <!-- 分隔線 -->
+
+        <!-- 🔍 新增：查詢行程區塊 -->
+        <div class="search-section">
+            <h2>查詢行程</h2>
+            <div class="search-group">
+                <input type="text" id="searchInput" placeholder="輸入關鍵字搜尋行程內容...">
+                <button type="button" id="searchBtn">搜尋</button>
+                <button type="button" id="clearBtn">清除關鍵字</button>
+            </div>
+        </div>
+
+        <!-- 📋 新增：行程列表顯示區域 -->
+        <div class="list-section">
+            <h2>行程列表</h2>
+            <ul id="tripList" class="trip-list">
+                <!-- 行程會透過 JS 動態產生在這裡 -->
+            </ul>
+        </div>
     </div>
+
     <!-- 引入你的 JS 檔案 -->
     <script src="script.js"></script>
 </body>
