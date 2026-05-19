@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>行程管理系統</title>
-    <link rel="stylesheet" href="style.css"> <!-- 引入 CSS 檔案 -->
+    <title>TIMETRO 行程管理系統</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
         <h1>新增行程</h1>
-        <form action="#" method="post"> 
+        <form id="addTripForm" action="#" method="post"> 
             <div class="form-group">
                 <label for="date">日期:</label>
                 <input type="date" id="date" name="date" required>
@@ -29,28 +29,44 @@
             <button type="submit">新增行程</button>
         </form>
 
-        <hr class="divider"> <!-- 分隔線 -->
+        <hr class="divider">
 
-        <!-- 🔍 新增：查詢行程區塊 -->
         <div class="search-section">
             <h2>查詢行程</h2>
             <div class="search-group">
                 <input type="text" id="searchInput" placeholder="輸入關鍵字搜尋行程內容...">
                 <button type="button" id="searchBtn">搜尋</button>
-                <button type="button" id="clearBtn">清除關鍵字</button>
+                <button type="button" id="clearBtn">清除</button>
             </div>
         </div>
 
-        <!-- 📋 新增：行程列表顯示區域 -->
         <div class="list-section">
             <h2>行程列表</h2>
-            <ul id="tripList" class="trip-list">
-                <!-- 行程會透過 JS 動態產生在這裡 -->
-            </ul>
+            <ul id="tripList" class="trip-list"></ul>
+        </div>
+
+        <hr class="divider">
+
+        <div class="photo-section">
+            <h2>為行程新增照片</h2>
+            <form id="addPhotoForm">
+                <div class="form-group">
+                    <label for="photoTripIndex">選擇行程編號 (從上面列表查看編號):</label>
+                    <input type="number" id="photoTripIndex" min="0" placeholder="例如: 0" required>
+                </div>
+                <div class="form-group">
+                    <label for="photoPath">照片檔案路徑 / 圖片網址:</label>
+                    <input type="text" id="photoPath" placeholder="例如: C:/images/photo.jpg 或 網址" required>
+                </div>
+                <div class="form-group">
+                    <label for="photoDesc">照片文字解說:</label>
+                    <input type="text" id="photoDesc" placeholder="輸入這張照片的文字解說...">
+                </div>
+                <button type="submit" style="background-color: #28a745;">儲存照片至行程</button>
+            </form>
         </div>
     </div>
 
-    <!-- 引入你的 JS 檔案 -->
     <script src="script.js"></script>
 </body>
 </html>
