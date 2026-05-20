@@ -15,6 +15,7 @@ def main():
         print("2. 查看所有行程與相片")
         print("3. 為行程新增照片路徑")
         print("4. 刪除行程")
+        print("5. 當月行程與相片日記回顧")
         print("q. 儲存並離開")
 
         choice = input("請選擇功能: ").strip().lower()
@@ -48,6 +49,9 @@ def main():
                 storage.save_data(tasks)  
                 print("刪除成功！")
             except Exception: print("刪除失敗。")
+        elif choice == '5':
+            try: task_manager.monthly_review(tasks)
+            except Exception: print("回顧讀取失敗。")
         elif choice == 'q':
             break
 
