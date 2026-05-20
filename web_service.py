@@ -12,7 +12,7 @@ log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
 # =====================================================
-# 🌐 網頁 HTML 前端：全面改用 Node 安全渲染，確保事件不漏失
+# 🌐 網頁 HTML 前端：新增修改時可清除/取消提醒時間之功能
 # =====================================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -62,6 +62,9 @@ HTML_TEMPLATE = """
         .modal-content { background-color: white; padding: 25px; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
         .modal-header { font-size: 1.3em; font-weight: bold; color: #4e73df; margin-bottom: 15px; border-bottom: 1px solid #e3e6f0; padding-bottom: 10px; }
         .modal-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px; }
+        
+        /* 橫向排列輸入框與清除鈕 */
+        .time-input-container { display: flex; gap: 8px; align-items: center; }
     </style>
 </head>
 <body>
@@ -70,11 +73,22 @@ HTML_TEMPLATE = """
         
         <h2>✨ 新增行程欄位</h2>
         <form id="addTripForm">
+            <label style="font-weight: bold; font-size: 0.9em; color: #4e73df; margin-bottom: -5px;">📅 選擇日期</label>
             <input type="date" id="date" required>
-            <input type="time" id="time" required>
-            <input type="text" id="content" placeholder="行程內容" required>
+            
+            <label style="font-weight: bold; font-size: 0.9em; color: #4e73df; margin-bottom: -5px;">⏰ 設置提醒時間 (選填)</label>
+            <div class="time-input-container">
+                <input type="time" id="time" style="flex: 1;">
+                <button type="button" onclick="document.getElementById('time').value=''" style="background-color: #858796; padding: 10px; font-size: 0.9em;">清除不提醒</button>
+            </div>
+            
+            <label style="font-weight: bold; font-size: 0.9em; color: #4e73df; margin-bottom: -5px;">✨ 行程內容</label>
+            <input type="text" id="content" placeholder="請輸入行程內容" required>
+            
+            <label style="font-weight: bold; font-size: 0.9em; color: #4e73df; margin-bottom: -5px;">💡 備註事項</label>
             <textarea id="note" placeholder="備註事項 (選填)"></textarea>
-            <button type="submit">儲存行程</button>
+            
+            <button type="submit" style="margin-top: 5px;">儲存行程</button>
         </form>
 
         <h2>🔍 行程搜尋與列表</h2>
@@ -98,8 +112,11 @@ HTML_TEMPLATE = """
                 <label style="font-weight: bold; font-size: 0.9em; color: #5a5c69;">📅 日期 (必須為 YYYY-MM-DD)</label>
                 <input type="text" id="editDate" placeholder="YYYY-MM-DD" required>
                 
-                <label style="font-weight: bold; font-size: 0.9em; color: #5a5c69;">⏰ 時間 (格式: HH:MM)</label>
-                <input type="time" id="editTime" required>
+                <label style="font-weight: bold; font-size: 0.9em; color: #5a5c69;">⏰ 設置提醒時間 (為空則代表不提醒)</label>
+                <div class="time-input-container" style="margin-bottom: 10px;">
+                    <input type="time" id="editTime" style="flex: 1;">
+                    <button type="button" onclick="document.getElementById('editTime').value=''" style="background-color: #e74a3b; padding: 9px; font-size: 0.85em;">❌ 取消設置</button>
+                </div>
                 
                 <label style="font-weight: bold; font-size: 0.9em; color: #5a5c69;">✨ 行程內容</label>
                 <input type="text" id="editContent" required>
@@ -172,7 +189,7 @@ HTML_TEMPLATE = """
             event.preventDefault();
             const taskData = {
                 date: document.getElementById('date').value,
-                time: document.getElementById('time').value,
+                time: document.getElementById('time').value.trim(),
                 content: document.getElementById('content').value,
                 note: document.getElementById('note').value
             };
@@ -256,7 +273,7 @@ HTML_TEMPLATE = """
             document.getElementById('editOldContent').value = targetTrip.content;
             
             document.getElementById('editDate').value = targetTrip.date;
-            document.getElementById('editTime').value = targetTrip.time;
+            document.getElementById('editTime').value = targetTrip.time || "";
             document.getElementById('editContent').value = targetTrip.content;
             document.getElementById('editNote').value = targetTrip.note || "";
             
@@ -288,7 +305,7 @@ HTML_TEMPLATE = """
                     old_time: document.getElementById('editOldTime').value,
                     old_content: document.getElementById('editOldContent').value,
                     new_date: inputDate,
-                    new_time: inputTime,
+                    new_time: inputTime, // 傳回可能已被清空的時間字串
                     new_content: inputContent,
                     new_note: inputNote
                 })
@@ -305,7 +322,6 @@ HTML_TEMPLATE = """
             });
         });
 
-        // 🌟 按鈕真正觸發：彈出相片修改視窗
         function openPhotoEditModalDirectly(taskStr, index, path, desc) {
             document.getElementById('photoTripString').value = taskStr;
             document.getElementById('photoIndex').value = index;
@@ -349,7 +365,6 @@ HTML_TEMPLATE = """
             });
         });
 
-        // 🌟 真正觸發單張相片刪除
         function fireDeleteSinglePhoto(taskStr, index) {
             const targetTrip = JSON.parse(decodeURIComponent(taskStr));
             if(confirm("⚠️ 確定要移除這張相片與其文字解說嗎？")) {
@@ -377,7 +392,11 @@ HTML_TEMPLATE = """
 
         function getSortedAndFilteredTrips() {
             let result = [...allTasks];
-            result.sort((a, b) => new Date(`${a.date} ${a.time}`) - new Date(`${b.date} ${b.time}`));
+            result.sort((a, b) => {
+                const timeA = a.time || "23:59";
+                const timeB = b.time || "23:59";
+                return new Date(`${a.date} ${timeA}`) - new Date(`${b.date} ${timeB}`);
+            });
             const keyword = searchInput.value.trim();
             if (keyword !== "") {
                 result = result.filter(t => 
@@ -393,6 +412,9 @@ HTML_TEMPLATE = """
                 const now = new Date();
                 const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
                 allTasks.forEach(task => {
+                    // 🌟 如果根本沒有設置提醒時間（為空字串），直接跳過不提醒
+                    if (!task.time || task.time.trim() === "") return;
+
                     if (`${task.date} ${task.time}` <= current && !task.reminded) {
                         task.reminded = true;
                         alert(`🔔 【TIMETRO 提醒通知】\\n行程：${task.content}\\n時間到了！`);
@@ -406,7 +428,6 @@ HTML_TEMPLATE = """
             }, 10000);
         }
 
-        // 🚀 【完美修正：核心節點安全渲染機制】
         function displayTrips() {
             tripList.innerHTML = "";
             const sortedTrips = getSortedAndFilteredTrips(); 
@@ -420,15 +441,16 @@ HTML_TEMPLATE = """
                 const serializedTrip = encodeURIComponent(JSON.stringify(trip));
                 const currentPhotoCount = trip.photos ? trip.photos.length : 0;
 
-                // 1. 建立外層卡片項目
                 const li = document.createElement('li');
                 li.className = 'trip-item';
                 
-                // 2. 注入基本內文架構
+                // 🌟 優化時間欄位顯示：如果被清空沒設置，改貼心提示「未設置提醒」
+                const timeDisplay = (trip.time && trip.time.trim() !== "") ? `⏰ 提醒時間: ${trip.time}` : `⏰ 未設置提醒`;
+
                 const noteHTML = trip.note ? `<div class="trip-item-note">💡 備註: ${trip.note}</div>` : '';
                 li.innerHTML = `
                     <div class="trip-item-header">
-                        <span>📅 ${trip.date} ⏰ ${trip.time}</span>
+                        <span>📅 ${trip.date} &nbsp;&nbsp; ${timeDisplay}</span>
                         <span class="trip-id-badge">順序編號: ${displayIndex}</span>
                     </div>
                     <div class="trip-item-content">${trip.content}</div>
@@ -443,12 +465,10 @@ HTML_TEMPLATE = """
                     </div>
                 `;
 
-                // 3. 綁定主卡片的行程按鈕事件 (牢固不遺失)
                 li.querySelector('.btn-edit-trip').onclick = () => editTrip(serializedTrip);
                 li.querySelector('.btn-delete-trip').onclick = () => deleteTrip(serializedTrip);
                 li.querySelector('.btn-add-photo').onclick = () => addPhotoToTaskDirectly(serializedTrip);
 
-                // 4. 動態構造相片牆（精確 Node 附加，根治事件蒸發與中文字亂碼）
                 if (trip.photos && trip.photos.length > 0) {
                     const mountPoint = li.querySelector('.photos-mount-point');
                     
@@ -468,7 +488,6 @@ HTML_TEMPLATE = """
                             imgSrc = `${window.location.origin}/api/view-photo?path=${encodeURIComponent(pPath)}`;
                         }
 
-                        // 建立相片方塊項目
                         const photoItem = document.createElement('div');
                         photoItem.className = 'photo-item';
                         
@@ -483,10 +502,8 @@ HTML_TEMPLATE = """
                             </div>
                         `;
 
-                        // 填入解說中文字（安全 textContent 不亂碼）
                         photoItem.querySelector('.txt-span').textContent = pDesc;
 
-                        // 為這兩顆特定的相片按鈕精確綁定實體點擊事件！
                         photoItem.querySelector('.inner-edit-btn').onclick = function() {
                             openPhotoEditModalDirectly(serializedTrip, pIdx, pPath, pDesc);
                         };
@@ -537,7 +554,7 @@ def add_task():
         tasks = storage.load_data()
         new_task = {
             "date": str(data.get("date", "")).strip(),
-            "time": str(data.get("time", "")).strip(),
+            "time": str(data.get("time", "")).strip(), # 儲存空字串代表未設置時間
             "content": str(data.get("content", "")).strip(),
             "note": str(data.get("note", "")).strip(),
             "photos": [], "photo_notes": [], "reminded": False
@@ -573,7 +590,7 @@ def edit_task():
         for task in tasks:
             if (str(task.get("date", "")).strip() == old_date and str(task.get("time", "")).strip() == old_time and str(task.get("content", "")).strip() == old_content):
                 task["date"] = str(data.get("new_date", task.get("date", ""))).strip()
-                task["time"] = str(data.get("new_time", task.get("time", ""))).strip()
+                task["time"] = str(data.get("new_time", "")).strip() # 完美更新空字串或新設定的時間
                 task["content"] = str(data.get("new_content", task.get("content", ""))).strip()
                 task["note"] = str(data.get("new_note", task.get("note", ""))).strip()
                 task["reminded"] = False 
@@ -659,7 +676,7 @@ def web_remind():
 
 if __name__ == '__main__':
     print("=====================================================")
-    print("🌐 TIMETRO 完全修復版網頁伺服器已啟動！")
+    print("🌐 TIMETRO 自由清除提醒時間完全修復版啟動！")
     print("🔗 請開啟瀏覽器前往：http://127.0.0.1:5000")
     print("=====================================================")
     app.run(host='127.0.0.1', port=5000, debug=False)
