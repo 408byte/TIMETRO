@@ -28,15 +28,17 @@ HTML_TEMPLATE = """
         button { background-color: #4e73df; color: white; border: none; cursor: pointer; font-weight: bold; }
         button:hover { background-color: #2e59d9; }
         .search-box { display: flex; gap: 10px; margin-bottom: 20px; }
-        #tripList { padding: 0; }
-        .trip-item { background: #fff; border: 1px solid #e3e6f0; padding: 15px; margin-bottom: 12px; border-radius: 8px; list-style: none; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-        .trip-item-header { display: flex; justify-content: space-between; align-items: center; color: #4e73df; font-weight: bold; }
+        #tripList, #reviewList { padding: 0; }
+        .trip-item, .review-item { background: #fff; border: 1px solid #e3e6f0; padding: 15px; margin-bottom: 12px; border-radius: 8px; list-style: none; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .trip-item-header, .review-item-header { display: flex; justify-content: space-between; align-items: center; color: #4e73df; font-weight: bold; }
         .trip-id-badge { background-color: #5a5c69; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; }
-        .trip-item-content { font-weight: bold; font-size: 1.1em; margin-top: 8px; color: #2e2f37; }
-        .trip-item-note { color: #6e707e; font-size: 0.9em; margin-top: 4px; }
-        .trip-photos { margin-top: 10px; border-top: 1px dashed #e3e6f0; padding-top: 8px; }
+        .trip-item-content, .review-item-content { font-weight: bold; font-size: 1.1em; margin-top: 8px; color: #2e2f37; }
+        .trip-item-note, .review-item-note { color: #6e707e; font-size: 0.9em; margin-top: 4px; }
+        .trip-photos, .review-photos { margin-top: 10px; border-top: 1px dashed #e3e6f0; padding-top: 8px; }
         .photo-item { background: #f8f9fa; border: 1px solid #e3e6f0; padding: 8px; margin-top: 5px; border-radius: 4px; }
         .photo-item img { max-width: 100%; max-height: 120px; display: block; margin-bottom: 5px; }
+        .no-result { list-style: none; color: #858796; padding: 10px; background: #f8f9fa; border-radius: 6px; text-align: center; }
+        .review-section { background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e3e6f0; margin-top: 25px; }
     </style>
 </head>
 <body>
@@ -58,8 +60,16 @@ HTML_TEMPLATE = """
             <button id="searchBtn">搜尋</button>
             <button id="clearBtn" style="background-color: #858796;">清除</button>
         </div>
-
         <ul id="tripList"></ul>
+
+        <div class="review-section">
+            <h2>💖 當月行程與相片日記回顧</h2>
+            <div class="search-box">
+                <input type="month" id="reviewMonthInput" style="flex: 1;">
+                <button id="reviewBtn" style="background-color: #1cc88a;">生成月度回顧展</button>
+            </div>
+            <ul id="reviewList"></ul>
+        </div>
     </div>
 
     <script>
@@ -70,7 +80,17 @@ HTML_TEMPLATE = """
         const searchInput = document.getElementById('searchInput');
         const searchBtn = document.getElementById('searchBtn');
         const clearBtn = document.getElementById('clearBtn');
+        
+        // 🌟 月度回顧前端元件
+        const reviewMonthInput = document.getElementById('reviewMonthInput');
+        const reviewBtn = document.getElementById('reviewBtn');
+        const reviewList = document.getElementById('reviewList');
+        
         let allTasks = [];
+
+        // 預設將回顧月份設為當前月份
+        const today = new Date();
+        reviewMonthInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 
         document.addEventListener('DOMContentLoaded', () => {
             fetchTasks();
@@ -205,6 +225,55 @@ HTML_TEMPLATE = """
                 tripList.appendChild(li);
             });
         }
+        
+        // 🌟 前端處理月度回顧渲染邏輯
+        reviewBtn.addEventListener('click', () => {
+            const selectedMonth = reviewMonthInput.value; // 格式如 "2026-05"
+            if (!selectedMonth) {
+                alert("請選擇月份！");
+                return;
+            }
+            
+            fetch(`${BASE_URL}/monthly-review?month=${selectedMonth}`)
+                .then(res => res.json())
+                .then(data => {
+                    reviewList.innerHTML = "";
+                    if (data.length === 0) {
+                        reviewList.innerHTML = `<li class="no-result">找不到該月份的任何行程紀錄。</li>`;
+                        return;
+                    }
+                    data.forEach(trip => {
+                        const noteHTML = trip.note ? `<div class="review-item-note">💡 備註: ${trip.note}</div>` : '';
+                        let photosHTML = '';
+                        if (trip.photos && trip.photos.length > 0) {
+                            photosHTML = `<div class="review-photos"><div style="font-size:0.85em; font-weight:bold; color:#4e73df;">📸 當月相片回顧：</div>`;
+                            trip.photos.forEach((p, pIdx) => {
+                                const pPath = (typeof p === 'object' && p !== null) ? p.path : p;
+                                let pDesc = (typeof p === 'object' && p !== null && p.desc) ? p.desc : (trip.photo_notes && trip.photo_notes[pIdx] ? trip.photo_notes[pIdx] : "無解說");
+                                photosHTML += `
+                                    <div class="photo-item">
+                                        <img src="${pPath}" onerror="this.style.display='none';">
+                                        <span style="font-size:0.85em; color:#6c757d; display:block; word-break:break-all;">📂 路徑: ${pPath}</span>
+                                        <span style="font-size:0.85em; color:#333; display:block; font-weight:bold;">💬 解說: ${pDesc}</span>
+                                    </div>`;
+                            });
+                            photosHTML += `</div>`;
+                        }
+                        const li = document.createElement('li');
+                        li.className = 'review-item';
+                        li.innerHTML = `
+                            <div class="review-item-header">
+                                <span>📅 ${trip.date} ⏰ ${trip.time}</span>
+                            </div>
+                            <div class="review-item-content">${trip.content}</div>
+                            ${noteHTML}
+                            ${photosHTML}`;
+                        reviewList.appendChild(li);
+                    });
+                })
+                .catch(err => alert("讀取回顧失敗：" + err));
+        });
+
         searchBtn.addEventListener('click', displayTrips);
         clearBtn.addEventListener('click', () => { searchInput.value = ''; displayTrips(); });
     </script>
@@ -237,6 +306,25 @@ def add_task():
         storage.save_data(tasks)
         print(f"🌐 [網頁端] 成功新增行程: {new_task['content']}")
         return jsonify({"status": "success"}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# 後端 API：每月生活回顧（內含連字號相容防呆機制）
+@app.route('/api/monthly-review', methods=['GET'])
+def get_monthly_review():
+    try:
+        target_month = request.args.get('month', '').strip() # 接收前端傳來的例如 "2026-05"
+        clean_target = target_month.replace("-", "") # 防呆：去掉連字號變 "202605"
+        
+        tasks = storage.load_data()
+        filtered_tasks = []
+        
+        for task in tasks:
+            clean_date = str(task.get("date", "")).replace("-", "") # 同步去掉行程日期的連字號
+            if clean_date.startswith(clean_target):
+                filtered_tasks.append(task)
+                
+        return jsonify(filtered_tasks), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
