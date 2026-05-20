@@ -31,18 +31,21 @@ def add_photo_to_task(tasks, index, path):
         print("已達 10 張照片上限。")
 
 def monthly_review(tasks):
-    """ 依特定月份過濾行程與照片，維持簡約排版風格 """
+    """ 依特定月份過濾行程與照片，維持簡約排版風格（內含極簡防呆） """
     print("\n--- 每月生活回顧 ---")
     if not tasks:
         print("目前沒有任何資料可以回顧。")
         return
 
     target_month = input("請輸入想回顧的月份 (例如 2026-05): ").strip()
+    clean_target = target_month.replace("-", "")
     print(f"\n--- {target_month} 歷史紀錄回顧 ---")
     
     found = False
     for t in tasks:
-        if t.get('date', '').startswith(target_month):
+        clean_date = t.get('date', '').replace("-", "")
+        
+        if clean_date.startswith(clean_target):
             found = True
             photos = t.get('photos', [])
             print(f"[{t.get('date')}] {t.get('time')} | {t.get('content')}")
