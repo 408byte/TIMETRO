@@ -1,5 +1,6 @@
 import storage
-from flask import Flask, jsonify, request, render_template_string
+import os
+from flask import Flask, jsonify, request, render_template_string, send_file
 from flask_cors import CORS
 import logging
 
@@ -18,7 +19,7 @@ HTML_TEMPLATE = """
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>TIMETRO 行事曆助手</title>
+    <title>TIMETRO 行事曆助手 — 完全版</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; color: #333; margin: 0; padding: 20px; }
         .container { max-width: 800px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
@@ -45,7 +46,7 @@ HTML_TEMPLATE = """
     <div class="container">
         <h1>📅 TIMETRO 行事曆助手</h1>
         
-        <h2>✨ 新增行程欄位</h2>
+        <h2>✨ 新增修改時可清除/取消提醒時間之功能</h2>
         <form id="addTripForm">
             <input type="date" id="date" required>
             <input type="time" id="time" required>
@@ -73,7 +74,7 @@ HTML_TEMPLATE = """
     </div>
 
     <script>
-        const BASE_URL = window.location.origin + "/api"; // 自動抓取目前同源網址
+        const BASE_URL = window.location.origin + "/api"; 
 
         const addTripForm = document.getElementById('addTripForm');
         const tripList = document.getElementById('tripList');
@@ -126,7 +127,6 @@ HTML_TEMPLATE = """
             });
         });
 
-        // 🌟 點擊卡片按鈕直接綁定照片
         function addPhotoToTaskDirectly(taskString) {
             const targetTrip = JSON.parse(decodeURIComponent(taskString));
             const photoPath = prompt(`📸 請輸入要為【${targetTrip.content}】新增的照片檔案路徑：`);
@@ -171,7 +171,7 @@ HTML_TEMPLATE = """
                 const now = new Date();
                 const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
                 allTasks.forEach(task => {
-                    if (`${task.date} ${task.time}` <= current && !task.reminded) {
+                    if (task.date && task.time && `${task.date} ${task.time}` <= current && !task.reminded) {
                         task.reminded = true;
                         alert(`🔔 【TIMETRO 提醒通知】\\n行程：${task.content}\\n時間到了！`);
                         fetch(`${BASE_URL}/web-remind`, {
@@ -226,9 +226,9 @@ HTML_TEMPLATE = """
             });
         }
         
-        // 🌟 前端處理月度回顧渲染邏輯
+        // 🌟 月度回顧前端渲染邏輯
         reviewBtn.addEventListener('click', () => {
-            const selectedMonth = reviewMonthInput.value; // 格式如 "2026-05"
+            const selectedMonth = reviewMonthInput.value; 
             if (!selectedMonth) {
                 alert("請選擇月份！");
                 return;
@@ -283,7 +283,6 @@ HTML_TEMPLATE = """
 
 @app.route('/')
 def home():
-    """ 直接渲染一體化網頁 """
     return render_template_string(HTML_TEMPLATE)
 
 @app.route('/api/tasks', methods=['GET'])
@@ -309,18 +308,18 @@ def add_task():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# 後端 API：每月生活回顧（內含連字號相容防呆機制）
+# 🌟 每月生活回顧 API 接口
 @app.route('/api/monthly-review', methods=['GET'])
 def get_monthly_review():
     try:
-        target_month = request.args.get('month', '').strip() # 接收前端傳來的例如 "2026-05"
-        clean_target = target_month.replace("-", "") # 防呆：去掉連字號變 "202605"
+        target_month = request.args.get('month', '').strip() 
+        clean_target = target_month.replace("-", "") 
         
         tasks = storage.load_data()
         filtered_tasks = []
         
         for task in tasks:
-            clean_date = str(task.get("date", "")).replace("-", "") # 同步去掉行程日期的連字號
+            clean_date = str(task.get("date", "")).replace("-", "") 
             if clean_date.startswith(clean_target):
                 filtered_tasks.append(task)
                 
