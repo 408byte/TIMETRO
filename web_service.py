@@ -14,7 +14,7 @@ log.setLevel(logging.ERROR)
 # =====================================================
 # 🌐 網頁 HTML 前端：新增修改時可清除/取消提醒時間之功能
 # =====================================================
-HTML_TEMPLATE = """
+HTML_TEMPLATE = r"""
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -35,13 +35,33 @@ HTML_TEMPLATE = """
         .trip-id-badge { background-color: #5a5c69; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; }
         .trip-item-content { font-weight: bold; font-size: 1.1em; margin-top: 8px; color: #2e2f37; }
         .trip-item-note { color: #6e707e; font-size: 0.9em; margin-top: 4px; }
+        #reviewList { display: block; padding: 0; list-style: none; margin-top: 0; }
+        .review-calendar { display: grid; gap: 10px; }
+        .calendar-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-weight: bold; color: #4e73df; margin-bottom: 6px; }
+        .calendar-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+        .calendar-day { min-height: 120px; background: #f9fbff; border: none; border-radius: 12px; padding: 10px; box-shadow: none; display: flex; flex-direction: column; justify-content: flex-start; }
+        .calendar-day.empty { background: transparent; border: none; box-shadow: none; }
+        .day-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+        .day-number { font-size: 0.9em; font-weight: bold; color: #4e73df; }
+        .day-event-title { background: rgba(78, 115, 223, 0.12); color: #1f2f79; border-radius: 999px; padding: 4px 8px; font-size: 0.82em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+        .day-event-title:hover { background: rgba(78, 115, 223, 0.18); }
+        .day-event-note { color: #6e707e; font-size: 0.8em; line-height: 1.2; margin-top: 4px; }
+        .day-photos-selection { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 8px; }
+        .photo-toggle { display: block; position: relative; border-radius: 8px; overflow: hidden; border: 1px solid rgba(78, 115, 223, 0.18); }
+        .photo-toggle input { position: absolute; top: 6px; left: 6px; z-index: 2; width: 16px; height: 16px; accent-color: #4e73df; }
+        .photo-toggle img { display: block; width: 100%; height: 60px; object-fit: cover; }
+        .photo-toggle.checked { box-shadow: 0 0 0 2px rgba(78, 115, 223, 0.28); }
+        .day-event-photos { margin-top: 8px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+        .day-event-photos img { width: 100%; height: 60px; object-fit: cover; border-radius: 6px; }
+        .photo-limit-note { color: #6e707e; font-size: 0.75em; margin-top: 4px; }
+        .calendar-note { color: #4e73df; font-size: 0.9em; margin-top: 6px; }
         
         /* 📸 相片牆網格樣式 */
         .trip-photos { margin-top: 15px; border-top: 1px dashed #e3e6f0; padding-top: 12px; }
+        .review-photos { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 12px; }
         .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 8px; }
         .photo-item { background: #f8f9fa; border: 1px solid #e3e6f0; padding: 8px; border-radius: 8px; display: flex; flex-direction: column; box-shadow: 0 2px 4px rgba(0,0,0,0.03); position: relative; }
-        .photo-wrapper { width: 100%; height: 130px; display: flex; align-items: center; justify-content: center; background: #eaecf4; border-radius: 6px; overflow: hidden; margin-bottom: 6px; }
-        .photo-item img { max-width: 100%; max-height: 100%; object-fit: cover; display: block; transition: transform 0.2s; }
+        .photo-item img { width: 100%; height: 180px; object-fit: cover; display: block; border-radius: 6px; transition: transform 0.2s; }
         .photo-item img:hover { transform: scale(1.05); }
         .photo-desc-text { font-size: 0.85em; color: #333; font-weight: bold; line-height: 1.3; margin-bottom: 8px; word-break: break-all; }
         
@@ -70,6 +90,9 @@ HTML_TEMPLATE = """
 <body>
     <div class="container">
         <h1>📅 TIMETRO 行事曆助手</h1>
+        <div style="padding: 10px; margin-bottom: 12px; background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; border-radius: 6px;">
+            目前頁面由 <strong>web_service.py</strong> 提供，請使用 <code>http://127.0.0.1:5001</code> 開啟。
+        </div>
         
         <h2>✨ 新增行程欄位</h2>
         <form id="addTripForm">
@@ -99,6 +122,20 @@ HTML_TEMPLATE = """
         </div>
 
         <ul id="tripList"></ul>
+
+        <div class="review-section">
+            <h2>💖 當月行程與相片日記回顧</h2>
+            <div class="search-box">
+                <input type="month" id="reviewMonthInput" style="flex: 1;">
+                <button type="button" id="reviewBtn" style="background-color: #1cc88a;">生成月度回顧展</button>
+                <button type="button" id="downloadReviewBtn" style="background-color: #f6c23e; color: #000;" disabled>下載回顧</button>
+                <select id="downloadFormatSelect" style="border-radius:6px; padding:0 8px; width:90px;">
+                    <option value="png">PNG</option>
+                    <option value="jpg">JPG</option>
+                </select>
+            </div>
+            <div id="reviewList"></div>
+        </div>
     </div>
 
     <div id="editModal" class="modal">
@@ -169,8 +206,221 @@ HTML_TEMPLATE = """
         const photoEditForm = document.getElementById('photoEditForm');
         
         let allTasks = [];
+        let currentReviewMonth = '';
+        const today = new Date();
 
         document.addEventListener('DOMContentLoaded', () => {
+            const reviewMonthInput = document.getElementById('reviewMonthInput');
+            const reviewBtn = document.getElementById('reviewBtn');
+            const downloadReviewBtn = document.getElementById('downloadReviewBtn');
+            const downloadFormatSelect = document.getElementById('downloadFormatSelect');
+            const reviewList = document.getElementById('reviewList');
+
+            console.log('web_service.py page loaded');
+            console.log('review elements', {reviewMonthInput, reviewBtn, reviewList});
+            if (!reviewMonthInput || !reviewBtn || !reviewList) {
+                document.body.insertAdjacentHTML('afterbegin', '<div style="padding:12px;background:#d63384;color:#fff;font-weight:bold;">DEBUG: 這是 web_service.py 頁面，或 review 元素尚未載入。請確認是從 web_service.py 提供的 http://127.0.0.1:5001 進入。</div>');
+            } else {
+                reviewMonthInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+                reviewBtn.addEventListener('click', () => {
+                    const selectedMonth = reviewMonthInput.value;
+                    if (!selectedMonth) {
+                        alert("請選擇月份！");
+                        return;
+                    }
+
+                    fetch(`${BASE_URL}/monthly-review?month=${selectedMonth}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            reviewList.innerHTML = "";
+                            if (data.length === 0) {
+                                reviewList.innerHTML = `<div class="no-result">找不到該月份的任何行程紀錄。</div>`;
+                                downloadReviewBtn.disabled = true;
+                                currentReviewMonth = '';
+                                return;
+                            }
+
+                            const tripsByDay = {};
+                            data.forEach(trip => {
+                                const day = parseInt(trip.date.split('-')[2], 10);
+                                if (!tripsByDay[day]) tripsByDay[day] = [];
+                                tripsByDay[day].push(trip);
+                            });
+
+                            const [year, month] = selectedMonth.split('-').map(num => parseInt(num, 10));
+                            const firstDayOfMonth = new Date(year, month - 1, 1);
+                            const totalDays = new Date(year, month, 0).getDate();
+                            const startWeekday = firstDayOfMonth.getDay();
+                            const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+
+                            const calendarHTML = [];
+                            calendarHTML.push('<div class="review-calendar">');
+                            calendarHTML.push('<div class="calendar-weekdays">');
+                            weekdays.forEach(dayName => calendarHTML.push(`<div>${dayName}</div>`));
+                            calendarHTML.push('</div>');
+                            calendarHTML.push('<div class="calendar-days">');
+
+                            for (let blank = 0; blank < startWeekday; blank++) {
+                                calendarHTML.push('<div class="calendar-day empty"></div>');
+                            }
+
+                            for (let day = 1; day <= totalDays; day++) {
+                                const dayTrips = tripsByDay[day] || [];
+                                calendarHTML.push('<div class="calendar-day">');
+                                calendarHTML.push('<div class="day-row">');
+                                calendarHTML.push(`<div class="day-number">${day}</div>`);
+                                if (dayTrips.length > 0) {
+                                    dayTrips.forEach(trip => {
+                                        calendarHTML.push(`<div class="day-event-title">${trip.content}</div>`);
+                                    });
+                                }
+                                calendarHTML.push('</div>');
+
+                                if (dayTrips.length > 0) {
+                                    const notes = dayTrips.filter(trip => trip.note).map(trip => `<div class="day-event-note">${trip.note}</div>`).join('');
+                                    if (notes) {
+                                        calendarHTML.push(notes);
+                                    }
+
+                                    const allPhotos = dayTrips.flatMap(trip => trip.photos || []);
+                                    if (allPhotos.length > 0) {
+                                        const photoSelectors = allPhotos.map((p, idx) => {
+                                            const pPath = (typeof p === 'object' && p !== null) ? p.path : p;
+                                            const src = /^https?:\/\//.test(pPath) || /^\/\//.test(pPath) || pPath.startsWith('data:')
+                                                ? pPath
+                                                : `${BASE_URL}/view-photo?path=${encodeURIComponent(pPath)}`;
+                                            return `<label class="photo-toggle checked" data-day="${day}" data-photo-index="${idx}">` +
+                                                `<input type="checkbox" checked data-day="${day}" data-photo-index="${idx}">` +
+                                                `<img src="${src}" alt="回顧圖" onerror="this.style.display='none';">` +
+                                                `</label>`;
+                                        }).join('');
+                                        const visiblePhotos = allPhotos.slice(0, 6).map((p, idx) => {
+                                            const pPath = (typeof p === 'object' && p !== null) ? p.path : p;
+                                            const src = /^https?:\/\//.test(pPath) || /^\/\//.test(pPath) || pPath.startsWith('data:')
+                                                ? pPath
+                                                : `${BASE_URL}/view-photo?path=${encodeURIComponent(pPath)}`;
+                                            return `<img src="${src}" alt="回顧圖" data-day="${day}" data-photo-index="${idx}" onerror="this.style.display='none';">`;
+                                        }).join('');
+                                        calendarHTML.push(`<div class="day-photos-selection">${photoSelectors}</div>`);
+                                        calendarHTML.push(`<div class="photo-limit-note">最多顯示 6 張圖片，取消勾選可隱藏。</div>`);
+                                        calendarHTML.push(`<div class="day-event-photos" data-day="${day}">${visiblePhotos}</div>`);
+                                    }
+                                }
+                                calendarHTML.push('</div>');
+                            }
+
+                            calendarHTML.push('</div>');
+                            calendarHTML.push('</div>');
+                            reviewList.innerHTML = calendarHTML.join('');
+                            downloadReviewBtn.disabled = false;
+                            currentReviewMonth = selectedMonth;
+                        })
+                        .catch(err => alert("讀取回顧失敗：" + err));
+                });
+
+                downloadReviewBtn.addEventListener('click', () => {
+                    if (!currentReviewMonth || !reviewList.innerHTML.trim()) {
+                        alert('請先生成月度回顧，再下載。');
+                        return;
+                    }
+                    downloadReviewImage(downloadFormatSelect.value || 'png');
+                });
+
+                reviewList.addEventListener('change', (event) => {
+                    const target = event.target;
+                    if (!target.matches('input[data-day][data-photo-index]')) return;
+                    const day = target.dataset.day;
+                    updateDayPhotoGrid(day);
+                });
+
+                function updateDayPhotoGrid(day) {
+                    const dayContainer = reviewList.querySelector(`.day-event-photos[data-day="${day}"]`);
+                    if (!dayContainer) return;
+                    const checkedInputs = Array.from(reviewList.querySelectorAll(`input[data-day="${day}"]:checked`));
+                    const selectedPhotos = checkedInputs.slice(0, 6).map(input => {
+                        const idx = parseInt(input.dataset.photoIndex, 10);
+                        const label = input.closest('.photo-toggle');
+                        return label ? label.querySelector('img') : null;
+                    }).filter(Boolean);
+
+                    dayContainer.innerHTML = selectedPhotos.map(img => `<img src="${img.src}" alt="回顧圖" onerror="this.style.display='none';">`).join('');
+                    Array.from(reviewList.querySelectorAll(`.photo-toggle[data-day="${day}"]`)).forEach(label => {
+                        const input = label.querySelector('input');
+                        label.classList.toggle('checked', input.checked);
+                    });
+                }
+
+                function downloadReviewImage(format) {
+                    if (typeof html2canvas !== 'function') {
+                        alert('無法載入 html2canvas，請確認網路連線或稍後再試。');
+                        return;
+                    }
+
+                    const exportContainer = reviewList.cloneNode(true);
+                    exportContainer.querySelectorAll('.day-photos-selection, .photo-limit-note').forEach(el => el.remove());
+
+                    const wrapper = document.createElement('div');
+                    wrapper.style.position = 'fixed';
+                    wrapper.style.left = '-9999px';
+                    wrapper.style.top = '-9999px';
+                    wrapper.style.opacity = '0';
+                    wrapper.appendChild(exportContainer);
+                    document.body.appendChild(wrapper);
+
+                    const originalDayCells = Array.from(reviewList.querySelectorAll('.calendar-day'));
+                    if (originalDayCells.length > 0) {
+                        let busiestIndex = 0;
+                        let maxCount = -1;
+                        originalDayCells.forEach((cell, idx) => {
+                            const cnt = cell.querySelectorAll('.day-event-title, .day-event-note, .day-event-photos img').length;
+                            if (cnt > maxCount) {
+                                maxCount = cnt;
+                                busiestIndex = idx;
+                            }
+                        });
+
+                        const exportCells = Array.from(exportContainer.querySelectorAll('.calendar-day'));
+                        const busiestExportCell = exportCells[busiestIndex] || exportCells[0];
+                        const monthMaxHeight = Math.ceil(busiestExportCell.scrollHeight || busiestExportCell.getBoundingClientRect().height || 120);
+
+                        exportCells.forEach(cell => {
+                            cell.style.height = `${monthMaxHeight}px`;
+                            cell.style.minHeight = 'auto';
+                            cell.style.flex = '0 0 auto';
+                            cell.style.overflow = 'visible';
+                            cell.style.boxSizing = 'border-box';
+                        });
+
+                        const exportWeekdays = exportContainer.querySelector('.calendar-weekdays');
+                        const exportDays = exportContainer.querySelector('.calendar-days');
+                        if (exportWeekdays) exportWeekdays.style.gridTemplateColumns = 'repeat(7, 1fr)';
+                        if (exportDays) exportDays.style.gridTemplateColumns = 'repeat(7, 1fr)';
+                    }
+
+                    const originalText = downloadReviewBtn.textContent;
+                    downloadReviewBtn.disabled = true;
+                    downloadReviewBtn.textContent = '準備中...';
+
+                    html2canvas(exportContainer, { backgroundColor: '#f4f6f9', scale: 2 })
+                        .then(canvas => {
+                            const mime = format === 'jpg' ? 'image/jpeg' : 'image/png';
+                            const dataUrl = canvas.toDataURL(mime, 0.95);
+                            const link = document.createElement('a');
+                            link.href = dataUrl;
+                            link.download = `TIMETRO_${currentReviewMonth}_回顧.${format}`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                        })
+                        .catch(err => alert('下載圖片失敗：' + err))
+                        .finally(() => {
+                            document.body.removeChild(wrapper);
+                            downloadReviewBtn.disabled = false;
+                            downloadReviewBtn.textContent = originalText;
+                        });
+                }
+            }
+
             fetchTasks();
             startReminderClock();
         });
@@ -521,9 +771,11 @@ HTML_TEMPLATE = """
                 tripList.appendChild(li);
             });
         }
+
         searchBtn.addEventListener('click', displayTrips);
         clearBtn.addEventListener('click', () => { searchInput.value = ''; displayTrips(); });
     </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </body>
 </html>
 """
@@ -674,9 +926,27 @@ def web_remind():
         return jsonify({"status": "success"}), 200
     except Exception: return jsonify({"status": "success"}), 200
 
+@app.route('/api/monthly-review', methods=['GET'])
+def get_monthly_review():
+    try:
+        target_month = request.args.get('month', '').strip() 
+        clean_target = target_month.replace("-", "") 
+        
+        tasks = storage.load_data()
+        filtered_tasks = []
+        
+        for task in tasks:
+            clean_date = str(task.get("date", "")).replace("-", "") 
+            if clean_date.startswith(clean_target):
+                filtered_tasks.append(task)
+                
+        return jsonify(filtered_tasks), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     print("=====================================================")
     print("🌐 TIMETRO 自由清除提醒時間完全修復版啟動！")
-    print("🔗 請開啟瀏覽器前往：http://127.0.0.1:5000")
+    print("🔗 請開啟瀏覽器前往：http://127.0.0.1:5001")
     print("=====================================================")
-    app.run(host='127.0.0.1', port=5000, debug=False)
+    app.run(host='127.0.0.1', port=5001, debug=False)
