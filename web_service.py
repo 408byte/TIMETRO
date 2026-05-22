@@ -7,12 +7,8 @@ import logging
 app = Flask(__name__)
 CORS(app) 
 
-# 隱藏 Flask 預設的繁雜小黑窗連線日誌，只顯示嚴重錯誤
-log = logging.getLogger('werkzeug')
-log.setLevel(logging.ERROR)
-
 # =====================================================
-# 🌐 網頁 HTML 前端：新增修改時可清除/取消提醒時間之功能
+# 🌐 網頁 HTML 前端：修正按鈕擠壓與相片顯示路徑問題
 # =====================================================
 HTML_TEMPLATE = r"""
 <!DOCTYPE html>
@@ -89,7 +85,7 @@ HTML_TEMPLATE = r"""
         .photo-limit-note { color: #6e707e; font-size: 0.75em; margin-top: 4px; }
         .calendar-note { color: #4e73df; font-size: 0.9em; margin-top: 6px; }
         
-        /* 📸 相片牆網格樣式：用 repeat(auto-fit) 讓卡片寬度在 180px 到滿版之間自動調配 */
+        /* 📸 相片牆網格樣式 */
         .trip-photos { margin-top: 15px; border-top: 1px dashed #e3e6f0; padding-top: 12px; width: 100%; }
         .review-photos { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 12px; width: 100%; }
         .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 8px; width: 100%; }
@@ -102,13 +98,30 @@ HTML_TEMPLATE = r"""
         .photo-actions { display: flex; gap: 4px; margin-top: auto; border-top: 1px solid #eaecf4; padding-top: 6px; justify-content: flex-end; }
         .btn-photo-mini { font-size: 0.75em; padding: 3px 6px; border-radius: 4px; font-weight: normal; width: auto; }
 
-        /* 控制按鈕區塊樣式 */
-        .action-container { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; border-top: 1px solid #f1f3f9; padding-top: 10px; width: 100%; }
+        /* 🛠️ 修正：控制按鈕底座，允許內容自然排開 */
+        .action-container { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-top: 12px; 
+            border-top: 1px solid #f1f3f9; 
+            padding-top: 10px; 
+            width: 100%; 
+            gap: 12px;
+        }
         .btn-danger { background-color: #e74a3b; width: auto; }
         .btn-danger:hover { background-color: #be2617; }
         .btn-success { background-color: #1cc88a; width: auto; }
         .btn-success:hover { background-color: #13855c; }
-        .btn-group { display: flex; gap: 5px; width: auto; }
+        
+        /* 🛠️ 修正：讓按鈕群組寬度自動，不壓縮彼此 */
+        .btn-group { 
+            display: flex; 
+            gap: 8px; 
+            align-items: center; 
+            width: auto; 
+            flex-shrink: 0;
+        }
 
         /* 一頁式彈窗樣式 (Modal UI) */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
@@ -122,65 +135,32 @@ HTML_TEMPLATE = r"""
         .time-input-container input { flex: 1; }
         .time-input-container button { width: auto; white-space: nowrap; }
 
-        /* ⭕ 新增左側欄樣式：佔 35% 寬度，負責行程編輯與查詢，內部可獨立滾動 */
-        .left-panel {
-            width: 35%;
-            height: 100%;
-            padding: 24px;
-            box-sizing: border-box;
-            background-color: #ffffff;
-            border-right: 2px solid #e3e6f0;
-            overflow-y: auto; 
-        }
+        /* ⭕ 新增左側欄樣式 */
+        .left-panel { width: 35%; height: 100%; padding: 24px; box-sizing: border-box; background-color: #ffffff; border-right: 2px solid #e3e6f0; overflow-y: auto; }
         
-        /* ⭕ 新增右側欄樣式：佔 65% 寬度，負責月度回顧區，預留給月曆與拍立得 */
-        .right-panel {
-            width: 65%;
-            height: 100%;
-            padding: 24px;
-            box-sizing: border-box;
-            background-color: #f8fafc; /* 微調為溫和的灰藍色背景，突顯回顧展質感 */
-            overflow-y: auto;
-        }
+        /* ⭕ 新增右側欄樣式 */
+        .right-panel { width: 65%; height: 100%; padding: 24px; box-sizing: border-box; background-color: #f8fafc; overflow-y: auto; }
 
-        /* ⭕ 強制修改與刪除按鈕：改為上下排列、置中、且文字絕不換行 */
-        .trip-item button, 
-        .left-panel button {
-            display: flex;
-            flex-direction: column;   /* 關鍵：讓圖標在上，文字在下 */
-            align-items: center;      /* 水平置中 */
-            justify-content: center;  /* 垂直置中 */
-            padding: 6px 10px;        /* 給按鈕舒適的內邊距 */
-            font-size: 0.85em;        /* 微調字體大小，更精緻 */
-            white-space: nowrap;      /* 關鍵：強制文字絕對不換行！ */
-            word-break: keep-all;     /* 配合 nowrap，防止中文字元被切斷 */
-            min-width: 65px;          /* 設定一個足夠撐開四個字的最小寬度 */
-            height: auto;             /* 高度隨內容自動撐開 */
-        }
-
-        /* 如果你的按鈕裡面有包圖標（例如 📝 或 🗑️），讓圖標與文字保有一點點間距 */
-        .trip-item button i,
-        .trip-item button span {
-            margin-bottom: 2px;
-        }
-
-        /* ⭕ 確保按鈕列的 Flex 容器不會壓扁裡面的按鈕 */
-        .btn-group, 
-        .action-container { 
-            display: flex; 
-            gap: 8px;                 /* 按鈕之間的間距 */
-            align-items: stretch;     /* 讓綠色和紅色按鈕高度對齐一致 */
-            width: 100%; 
+        /* 🛠️ 修正：讓所有功能按鈕字體舒服展開，拒絕擠壓換行，留白充裕 */
+        .trip-item button, .left-panel button { 
+            display: inline-flex; 
+            align-items: center; 
+            justify-content: center; 
+            padding: 8px 16px; 
+            font-size: 0.9em; 
+            white-space: nowrap; 
+            word-break: keep-all; 
+            width: auto; 
+            height: auto; 
         }
     </style>
 </head>
 <body>
     <div class="container">
-        
         <div class="left-panel">
             <h1>📅 TIMETRO 行事曆助手</h1>
             <div style="padding: 10px; margin-bottom: 12px; background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; border-radius: 6px;">
-                目前頁面由 <strong>web_service.py</strong> 提供，請使用 <code>http://127.0.0.1:5001</code> 開啟。
+                目前頁面由 <strong>web_service.py</strong> 提供，請使用 <a href="http://127.0.0.1:5001" target="_blank">http://127.0.0.1:5001</a> 開啟。
             </div>
             
             <h2>✨ 新增行程欄位</h2>
@@ -215,7 +195,6 @@ HTML_TEMPLATE = r"""
         
         <div class="right-panel">
             <h2>💖 當月行程與相片日記回顧</h2>
-            
             <div class="search-box">
                 <input type="month" id="reviewMonthInput" style="flex: 1;">
                 <button type="button" id="reviewBtn" style="background-color: #1cc88a;">生成月度回顧展</button>
@@ -227,7 +206,6 @@ HTML_TEMPLATE = r"""
             </div>
             <div id="reviewList"></div>
         </div>
-
     </div>
 
     <div id="editModal" class="modal">
@@ -301,18 +279,21 @@ HTML_TEMPLATE = r"""
         let currentReviewMonth = '';
         const today = new Date();
 
+        // 🔧 內部輔助：處理相片 URL 的特殊反斜線，防止傳輸損壞
+        function getPhotoUrl(path) {
+            if (/^https?:\/\//i.test(path) || /^\/\//.test(path) || path.startsWith('data:')) {
+                return path;
+            }
+            return `${BASE_URL}/view-photo?path=${encodeURIComponent(path)}`;
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const reviewMonthInput = document.getElementById('reviewMonthInput');
             const reviewBtn = document.getElementById('reviewBtn');
             const downloadReviewBtn = document.getElementById('downloadReviewBtn');
-            const downloadFormatSelect = document.getElementById('downloadFormatSelect');
             const reviewList = document.getElementById('reviewList');
 
-            console.log('web_service.py page loaded');
-            console.log('review elements', {reviewMonthInput, reviewBtn, reviewList});
-            if (!reviewMonthInput || !reviewBtn || !reviewList) {
-                document.body.insertAdjacentHTML('afterbegin', '<div style="padding:12px;background:#d63384;color:#fff;font-weight:bold;">DEBUG: 這是 web_service.py 頁面，或 review 元素尚未載入。請確認是從 web_service.py 提供的 http://127.0.0.1:5001 進入。</div>');
-            } else {
+            if (reviewMonthInput) {
                 reviewMonthInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
                 reviewBtn.addEventListener('click', () => {
                     const selectedMonth = reviewMonthInput.value;
@@ -367,7 +348,6 @@ HTML_TEMPLATE = r"""
                                     });
                                 }
                                 calendarHTML.push('</div>');
-
                                 if (dayTrips.length > 0) {
                                     const notes = dayTrips.filter(trip => trip.note).map(trip => `<div class="day-event-note">${trip.note}</div>`).join('');
                                     if (notes) {
@@ -378,9 +358,7 @@ HTML_TEMPLATE = r"""
                                     if (allPhotos.length > 0) {
                                         const photoSelectors = allPhotos.map((p, idx) => {
                                             const pPath = (typeof p === 'object' && p !== null) ? p.path : p;
-                                            const src = /^https?:\/\//.test(pPath) || /^\/\//.test(pPath) || pPath.startsWith('data:')
-                                                ? pPath
-                                                : `${BASE_URL}/view-photo?path=${encodeURIComponent(pPath)}`;
+                                            const src = getPhotoUrl(pPath);
                                             return `<label class="photo-toggle checked" data-day="${day}" data-photo-index="${idx}">` +
                                                 `<input type="checkbox" checked data-day="${day}" data-photo-index="${idx}">` +
                                                 `<img src="${src}" alt="回顧圖" onerror="this.style.display='none';">` +
@@ -388,9 +366,7 @@ HTML_TEMPLATE = r"""
                                         }).join('');
                                         const visiblePhotos = allPhotos.slice(0, 6).map((p, idx) => {
                                             const pPath = (typeof p === 'object' && p !== null) ? p.path : p;
-                                            const src = /^https?:\/\//.test(pPath) || /^\/\//.test(pPath) || pPath.startsWith('data:')
-                                                ? pPath
-                                                : `${BASE_URL}/view-photo?path=${encodeURIComponent(pPath)}`;
+                                            const src = getPhotoUrl(pPath);
                                             return `<img src="${src}" alt="回顧圖" data-day="${day}" data-photo-index="${idx}" onerror="this.style.display='none';">`;
                                         }).join('');
                                         calendarHTML.push(`<div class="day-photos-selection">${photoSelectors}</div>`);
@@ -424,105 +400,97 @@ HTML_TEMPLATE = r"""
                     const day = target.dataset.day;
                     updateDayPhotoGrid(day);
                 });
+            }
 
-                function updateDayPhotoGrid(day) {
-                    const dayContainer = reviewList.querySelector(`.day-event-photos[data-day="${day}"]`);
-                    if (!dayContainer) return;
-                    const checkedInputs = Array.from(reviewList.querySelectorAll(`input[data-day="${day}"]:checked`));
-                    const selectedPhotos = checkedInputs.slice(0, 6).map(input => {
-                        const idx = parseInt(input.dataset.photoIndex, 10);
-                        const label = input.closest('.photo-toggle');
-                        return label ? label.querySelector('img') : null;
-                    }).filter(Boolean);
+            function updateDayPhotoGrid(day) {
+                const dayContainer = reviewList.querySelector(`.day-event-photos[data-day="${day}"]`);
+                if (!dayContainer) return;
+                const checkedInputs = Array.from(reviewList.querySelectorAll(`input[data-day="${day}"]:checked`));
+                const selectedPhotos = checkedInputs.slice(0, 6).map(input => {
+                    const idx = parseInt(input.dataset.photoIndex, 10);
+                    const label = input.closest('.photo-toggle');
+                    return label ? label.querySelector('img') : null;
+                }).filter(Boolean);
+                dayContainer.innerHTML = selectedPhotos.map(img => `<img src="${img.src}" alt="回顧圖" onerror="this.style.display='none';">`).join('');
+                Array.from(reviewList.querySelectorAll(`.photo-toggle[data-day="${day}"]`)).forEach(label => {
+                    const input = label.querySelector('input');
+                    label.classList.toggle('checked', input.checked);
+                });
+            }
 
-                    dayContainer.innerHTML = selectedPhotos.map(img => `<img src="${img.src}" alt="回顧圖" onerror="this.style.display='none';">`).join('');
-                    Array.from(reviewList.querySelectorAll(`.photo-toggle[data-day="${day}"]`)).forEach(label => {
-                        const input = label.querySelector('input');
-                        label.classList.toggle('checked', input.checked);
+            function downloadReviewImage(format) {
+                if (typeof html2canvas !== 'function') {
+                    alert('無法載入 html2canvas，請確認網路連線或稍後再試。');
+                    return;
+                }
+
+                const exportContainer = reviewList.cloneNode(true);
+                exportContainer.querySelectorAll('.day-photos-selection, .photo-limit-note').forEach(el => el.remove());
+
+                const wrapper = document.createElement('div');
+                wrapper.style.position = 'fixed';
+                wrapper.style.left = '-9999px';
+                wrapper.style.top = '-9999px';
+                wrapper.style.opacity = '0';
+                wrapper.appendChild(exportContainer);
+                document.body.appendChild(wrapper);
+
+                const originalDayCells = Array.from(reviewList.querySelectorAll('.calendar-day'));
+                if (originalDayCells.length > 0) {
+                    let busiestIndex = 0;
+                    let maxCount = -1;
+                    originalDayCells.forEach((cell, idx) => {
+                        const cnt = cell.querySelectorAll('.day-event-title, .day-event-note, .day-event-photos img').length;
+                        if (cnt > maxCount) {
+                            maxCount = cnt;
+                            busiestIndex = idx;
+                        }
                     });
+                    const exportCells = Array.from(exportContainer.querySelectorAll('.calendar-day'));
+                    const busiestExportCell = exportCells[busiestIndex] || exportCells[0];
+                    const monthMaxHeight = Math.ceil(busiestExportCell.scrollHeight || busiestExportCell.getBoundingClientRect().height || 120);
+                    exportCells.forEach(cell => {
+                        cell.style.height = `${monthMaxHeight}px`;
+                        cell.style.minHeight = 'auto';
+                        cell.style.flex = '0 0 auto';
+                        cell.style.overflow = 'visible';
+                        cell.style.boxSizing = 'border-box';
+                    });
+                    const exportWeekdays = exportContainer.querySelector('.calendar-weekdays');
+                    const exportDays = exportContainer.querySelector('.calendar-days');
+                    if (exportWeekdays) exportWeekdays.style.gridTemplateColumns = 'repeat(7, 1fr)';
+                    if (exportDays) exportDays.style.gridTemplateColumns = 'repeat(7, 1fr)';
                 }
 
-                function downloadReviewImage(format) {
-                    if (typeof html2canvas !== 'function') {
-                        alert('無法載入 html2canvas，請確認網路連線或稍後再試。');
-                        return;
-                    }
+                const originalText = downloadReviewBtn.textContent;
+                downloadReviewBtn.disabled = true;
+                downloadReviewBtn.textContent = '準備中...';
 
-                    const exportContainer = reviewList.cloneNode(true);
-                    exportContainer.querySelectorAll('.day-photos-selection, .photo-limit-note').forEach(el => el.remove());
-
-                    const wrapper = document.createElement('div');
-                    wrapper.style.position = 'fixed';
-                    wrapper.style.left = '-9999px';
-                    wrapper.style.top = '-9999px';
-                    wrapper.style.opacity = '0';
-                    wrapper.appendChild(exportContainer);
-                    document.body.appendChild(wrapper);
-
-                    const originalDayCells = Array.from(reviewList.querySelectorAll('.calendar-day'));
-                    if (originalDayCells.length > 0) {
-                        let busiestIndex = 0;
-                        let maxCount = -1;
-                        originalDayCells.forEach((cell, idx) => {
-                            const cnt = cell.querySelectorAll('.day-event-title, .day-event-note, .day-event-photos img').length;
-                            if (cnt > maxCount) {
-                                maxCount = cnt;
-                                busiestIndex = idx;
-                            }
-                        });
-
-                        const exportCells = Array.from(exportContainer.querySelectorAll('.calendar-day'));
-                        const busiestExportCell = exportCells[busiestIndex] || exportCells[0];
-                        const monthMaxHeight = Math.ceil(busiestExportCell.scrollHeight || busiestExportCell.getBoundingClientRect().height || 120);
-
-                        exportCells.forEach(cell => {
-                            cell.style.height = `${monthMaxHeight}px`;
-                            cell.style.minHeight = 'auto';
-                            cell.style.flex = '0 0 auto';
-                            cell.style.overflow = 'visible';
-                            cell.style.boxSizing = 'border-box';
-                        });
-
-                        const exportWeekdays = exportContainer.querySelector('.calendar-weekdays');
-                        const exportDays = exportContainer.querySelector('.calendar-days');
-                        if (exportWeekdays) exportWeekdays.style.gridTemplateColumns = 'repeat(7, 1fr)';
-                        if (exportDays) exportDays.style.gridTemplateColumns = 'repeat(7, 1fr)';
-                    }
-
-                    const originalText = downloadReviewBtn.textContent;
-                    downloadReviewBtn.disabled = true;
-                    downloadReviewBtn.textContent = '準備中...';
-
-                    html2canvas(exportContainer, { backgroundColor: '#f4f6f9', scale: 2 })
-                        .then(canvas => {
-                            const mime = format === 'jpg' ? 'image/jpeg' : 'image/png';
-                            const dataUrl = canvas.toDataURL(mime, 0.95);
-                            const link = document.createElement('a');
-                            link.href = dataUrl;
-                            link.download = `TIMETRO_${currentReviewMonth}_回顧.${format}`;
-                            document.body.appendChild(link);
-                            link.click();
-                            document.body.removeChild(link);
-                        })
-                        .catch(err => alert('下載圖片失敗：' + err))
-                        .finally(() => {
-                            document.body.removeChild(wrapper);
-                            downloadReviewBtn.disabled = false;
-                            downloadReviewBtn.textContent = originalText;
-                        });
-                }
+                html2canvas(exportContainer, { backgroundColor: '#f4f6f9', scale: 2 })
+                    .then(canvas => {
+                        const mime = format === 'jpg' ? 'image/jpeg' : 'image/png';
+                        const dataUrl = canvas.toDataURL(mime, 0.95);
+                        const link = document.createElement('a');
+                        link.href = dataUrl;
+                        link.download = `TIMETRO_${currentReviewMonth}_回顧.${format}`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    })
+                    .catch(err => alert('下載圖片失敗：' + err))
+                    .finally(() => {
+                        document.body.removeChild(wrapper);
+                        downloadReviewBtn.disabled = false;
+                        downloadReviewBtn.textContent = originalText;
+                    });
             }
 
             fetchTasks();
             startReminderClock();
 
-            // ⭕ 自動生成當月回顧展
-            console.log("🚀 系統初始化：自動調用當月月度回顧展");
-            const autoReviewMonth = reviewMonthInput.value;
-            if (autoReviewMonth) {
-                // 延遲 500ms 確保 fetchTasks 已完成
+            const autoReviewMonth = reviewMonthInput ? reviewMonthInput.value : '';
+            if (autoReviewMonth && reviewBtn) {
                 setTimeout(() => {
-                    console.log(`📅 自動觸發回顧展：${autoReviewMonth}`);
                     reviewBtn.click();
                 }, 500);
             }
@@ -546,7 +514,6 @@ HTML_TEMPLATE = r"""
                 content: document.getElementById('content').value,
                 note: document.getElementById('note').value
             };
-
             fetch(`${BASE_URL}/tasks`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -556,7 +523,7 @@ HTML_TEMPLATE = r"""
             .then(() => {
                 alert("🎉 行程新增成功！");
                 addTripForm.reset();
-                fetchTasks(); 
+                fetchTasks();
             });
         });
 
@@ -566,10 +533,10 @@ HTML_TEMPLATE = r"""
                 alert(`❌ 無法新增！【${targetTrip.content}】相片解說已達 10 筆上限！`);
                 return;
             }
-            const photoPath = prompt(`📸 請輸入要為【${targetTrip.content}】新增的照片檔案路徑：\\n(例如：C:\\\\images\\\\pic.jpg 或 圖片網址)`);
+            const photoPath = prompt(`📸 請輸入要為【${targetTrip.content}】新增的照片檔案路徑：\n(例如：C:\\images\\pic.jpg 或 圖片網址)`);
             if (!photoPath || photoPath.trim() === "") return;
             const photoDesc = prompt("💬 請輸入這張照片的文字解說（選填）：", "無解說");
-
+            
             fetch(`${BASE_URL}/web-photo`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -609,7 +576,7 @@ HTML_TEMPLATE = r"""
                 .then(data => {
                     if (data.status === "success") {
                         alert("🗑️ 行程已成功刪除！");
-                        fetchTasks(); 
+                        fetchTasks();
                     } else {
                         alert("❌ 刪除失敗：" + data.message);
                     }
@@ -620,22 +587,17 @@ HTML_TEMPLATE = r"""
 
         function editTrip(taskString) {
             const targetTrip = JSON.parse(decodeURIComponent(taskString));
-            
             document.getElementById('editOldDate').value = targetTrip.date;
             document.getElementById('editOldTime').value = targetTrip.time;
             document.getElementById('editOldContent').value = targetTrip.content;
-            
             document.getElementById('editDate').value = targetTrip.date;
             document.getElementById('editTime').value = targetTrip.time || "";
             document.getElementById('editContent').value = targetTrip.content;
             document.getElementById('editNote').value = targetTrip.note || "";
-            
             editModal.style.display = 'flex';
         }
 
-        function closeEditModal() {
-            editModal.style.display = 'none';
-        }
+        function closeEditModal() { editModal.style.display = 'none'; }
 
         editTripForm.addEventListener('submit', function(event) {
             event.preventDefault();
@@ -643,13 +605,11 @@ HTML_TEMPLATE = r"""
             const inputTime = document.getElementById('editTime').value.trim();
             const inputContent = document.getElementById('editContent').value.trim();
             const inputNote = document.getElementById('editNote').value.trim();
-
             const datePattern = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
             if (!datePattern.test(inputDate)) {
-                alert("❌ 日期格式錯誤！\\n請務必符合 YYYY-MM-DD 格式（例如：2026-05-20）");
+                alert("❌ 日期格式錯誤！\n請務必符合 YYYY-MM-DD 格式（例如：2026-05-20）");
                 return;
             }
-
             fetch(`${BASE_URL}/web-edit`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -658,7 +618,7 @@ HTML_TEMPLATE = r"""
                     old_time: document.getElementById('editOldTime').value,
                     old_content: document.getElementById('editOldContent').value,
                     new_date: inputDate,
-                    new_time: inputTime, // 傳回可能已被清空的時間字串
+                    new_time: inputTime,
                     new_content: inputContent,
                     new_note: inputNote
                 })
@@ -683,9 +643,7 @@ HTML_TEMPLATE = r"""
             photoEditModal.style.display = 'flex';
         }
 
-        function closePhotoEditModal() {
-            photoEditModal.style.display = 'none';
-        }
+        function closePhotoEditModal() { photoEditModal.style.display = 'none'; }
 
         photoEditForm.addEventListener('submit', function(e) {
             e.preventDefault();
@@ -693,7 +651,6 @@ HTML_TEMPLATE = r"""
             const pIndex = document.getElementById('photoIndex').value;
             const newPath = document.getElementById('photoEditPath').value.trim();
             const newDesc = document.getElementById('photoEditDesc').value.trim();
-
             fetch(`${BASE_URL}/web-photo-update`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -736,10 +693,14 @@ HTML_TEMPLATE = r"""
                     if(data.status === "success") {
                         alert("🗑️ 相片已成功移除！");
                         fetchTasks();
+                        const rmInput = document.getElementById('reviewMonthInput');
+                        const rBtn = document.getElementById('reviewBtn');
+                        if (rmInput && rBtn && rmInput.value) { rBtn.click(); }
                     } else {
                         alert("❌ 移除失敗：" + data.message);
                     }
-                });
+                })
+                .catch(err => alert("❌ 連線錯誤：" + err));
             }
         }
 
@@ -765,12 +726,10 @@ HTML_TEMPLATE = r"""
                 const now = new Date();
                 const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
                 allTasks.forEach(task => {
-                    // 🌟 如果根本沒有設置提醒時間（為空字串），直接跳過不提醒
                     if (!task.time || task.time.trim() === "") return;
-
                     if (`${task.date} ${task.time}` <= current && !task.reminded) {
                         task.reminded = true;
-                        alert(`🔔 【TIMETRO 提醒通知】\\n行程：${task.content}\\n時間到了！`);
+                        alert(`🔔 【TIMETRO 提醒通知】\n行程：${task.content}\n時間到了！`);
                         fetch(`${BASE_URL}/web-remind`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -783,238 +742,197 @@ HTML_TEMPLATE = r"""
 
         function displayTrips() {
             tripList.innerHTML = "";
-            const sortedTrips = getSortedAndFilteredTrips(); 
-            
+            const sortedTrips = getSortedAndFilteredTrips();
             if (sortedTrips.length === 0) {
                 tripList.innerHTML = `<li class="no-result">沒有找到任何行程記錄 📭</li>`;
                 return;
             }
-            
-            sortedTrips.forEach((trip, displayIndex) => {
-                const serializedTrip = encodeURIComponent(JSON.stringify(trip));
-                const currentPhotoCount = trip.photos ? trip.photos.length : 0;
-
+            sortedTrips.forEach((trip) => {
                 const li = document.createElement('li');
                 li.className = 'trip-item';
                 
-                // 🌟 優化時間欄位顯示：如果被清空沒設置，改貼心提示「未設置提醒」
-                const timeDisplay = (trip.time && trip.time.trim() !== "") ? `⏰ 提醒時間: ${trip.time}` : `⏰ 未設置提醒`;
-
-                const noteHTML = trip.note ? `<div class="trip-item-note">💡 備註: ${trip.note}</div>` : '';
-                li.innerHTML = `
-                    <div class="trip-item-header">
-                        <span>📅 ${trip.date} &nbsp;&nbsp; ${timeDisplay}</span>
-                        <span class="trip-id-badge">順序編號: ${displayIndex}</span>
-                    </div>
-                    <div class="trip-item-content">${trip.content}</div>
-                    ${noteHTML}
-                    <div class="photos-mount-point"></div>
-                    <div class="action-container">
-                        <div class="btn-group">
-                            <button class="btn-success btn-edit-trip" style="font-size:0.85em; padding:5px 10px;">✏️ 修改行程</button>
-                            <button class="btn-danger btn-delete-trip" style="font-size:0.85em; padding:5px 10px;">🗑️ 刪除</button>
-                        </div>
-                        <button class="btn-add-photo" style="font-size:0.85em; padding:5px 10px;">➕ 新增相片與文字解說 (${currentPhotoCount}/10)</button>
-                    </div>
-                `;
-
-                li.querySelector('.btn-edit-trip').onclick = () => editTrip(serializedTrip);
-                li.querySelector('.btn-delete-trip').onclick = () => deleteTrip(serializedTrip);
-                li.querySelector('.btn-add-photo').onclick = () => addPhotoToTaskDirectly(serializedTrip);
-
+                let timeStr = trip.time ? `⏰ ${trip.time}` : '🔔 不設定提醒';
+                let noteStr = trip.note ? `<div class="trip-item-note">💡 ${trip.note}</div>` : '';
+                
+                const serializedTrip = encodeURIComponent(JSON.stringify(trip));
+                
+                let photosHTML = "";
                 if (trip.photos && trip.photos.length > 0) {
-                    const mountPoint = li.querySelector('.photos-mount-point');
-                    
-                    const photosContainer = document.createElement('div');
-                    photosContainer.className = 'trip-photos';
-                    photosContainer.innerHTML = `<div style="font-size:0.85em; font-weight:bold; color:#4e73df;">📸 附隨相片牆 (${currentPhotoCount}/10 筆)：</div>`;
-                    
-                    const photoGrid = document.createElement('div');
-                    photoGrid.className = 'photo-grid';
-
+                    photosHTML += `<div class="trip-photos"><h5>🖼️ 精選相片日記</h5><div class="photo-grid">`;
                     trip.photos.forEach((p, pIdx) => {
                         const pPath = (typeof p === 'object' && p !== null) ? p.path : p;
-                        let pDesc = (typeof p === 'object' && p !== null && p.desc) ? p.desc : (trip.photo_notes && trip.photo_notes[pIdx] ? trip.photo_notes[pIdx] : "無解說");
                         
-                        let imgSrc = pPath;
-                        if (!pPath.startsWith('http://') && !pPath.startsWith('https://')) {
-                            imgSrc = `${window.location.origin}/api/view-photo?path=${encodeURIComponent(pPath)}`;
+                        let pDesc = "無解說";
+                        if (trip.photo_notes && trip.photo_notes[pIdx]) {
+                            pDesc = trip.photo_notes[pIdx];
+                        } else if (typeof p === 'object' && p !== null && p.desc) {
+                            pDesc = p.desc;
                         }
 
-                        const photoItem = document.createElement('div');
-                        photoItem.className = 'photo-item';
-                        
-                        photoItem.innerHTML = `
-                            <div class="photo-wrapper">
+                        const imgSrc = getPhotoUrl(pPath);
+
+                        // 轉義單引號防止 JS 傳參崩潰
+                        const safePath = pPath.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+                        const safeDesc = pDesc.replace(/'/g, "\\'");
+
+                        photosHTML += `
+                            <div class="photo-item" data-photo-idx="${pIdx}">
+                                <div class="photo-grid-desc-text">💬 <span class="txt-span">${pDesc}</span></div>
                                 <img src="${imgSrc}" onerror="this.src='https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200'; this.style.opacity='0.5';">
-                            </div>
-                            <div class="photo-desc-text">💬 <span class="txt-span"></span></div>
-                            <div class="photo-actions">
-                                <button type="button" class="btn-success btn-photo-mini inner-edit-btn">✏️ 更改</button>
-                                <button type="button" class="btn-danger btn-photo-mini inner-del-btn">🗑️</button>
-                            </div>
-                        `;
-
-                        photoItem.querySelector('.txt-span').textContent = pDesc;
-
-                        photoItem.querySelector('.inner-edit-btn').onclick = function() {
-                            openPhotoEditModalDirectly(serializedTrip, pIdx, pPath, pDesc);
-                        };
-                        photoItem.querySelector('.inner-del-btn').onclick = function() {
-                            fireDeleteSinglePhoto(serializedTrip, pIdx);
-                        };
-
-                        photoGrid.appendChild(photoItem);
+                                <div class="photo-actions">
+                                    <button type="button" class="btn-success btn-photo-mini inner-edit-btn" onclick="openPhotoEditModalDirectly('${serializedTrip}', ${pIdx}, '${safePath}', '${safeDesc}')">✏️ 更改</button>
+                                    <button type="button" class="btn-danger btn-photo-mini inner-del-btn" onclick="fireDeleteSinglePhoto('${serializedTrip}', ${pIdx})">🗑️</button>
+                                </div>
+                            </div>`;
                     });
-
-                    photosContainer.appendChild(photoGrid);
-                    mountPoint.appendChild(photosContainer);
+                    photosHTML += `</div></div>`;
                 }
 
+                li.innerHTML = `
+                    <div class="trip-item-header">
+                        <span>📅 ${trip.date} &nbsp;&nbsp; ${timeStr}</span>
+                    </div>
+                    <div class="trip-item-content">${trip.content}</div>
+                    ${noteStr}
+                    ${photosHTML}
+                    <div class="action-container">
+                        <button class="btn-success" onclick="addPhotoToTaskDirectly('${serializedTrip}')">📸 新增相片解說</button>
+                        <div class="btn-group">
+                            <button class="btn-success" onclick="editTrip('${serializedTrip}')">📝 修改</button>
+                            <button class="btn-danger" onclick="deleteTrip('${serializedTrip}')">🗑️ 刪除</button>
+                        </div>
+                    </div>
+                `;
                 tripList.appendChild(li);
             });
         }
 
-        searchBtn.addEventListener('click', displayTrips);
-        clearBtn.addEventListener('click', () => { searchInput.value = ''; displayTrips(); });
+        if (searchBtn) {
+            searchBtn.addEventListener('click', displayTrips);
+            clearBtn.addEventListener('click', () => { searchInput.value = ""; displayTrips(); });
+            searchInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') displayTrips(); });
+        }
     </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </body>
 </html>
 """
 
+# =====================================================
+# 🐍 Flask 後端核心路由與相片路徑傳輸安全修正
+# =====================================================
 @app.route('/')
-def home():
+def index():
     return render_template_string(HTML_TEMPLATE)
+
+@app.route('/api/tasks', methods=['GET', 'POST'])
+def handle_tasks():
+    if request.method == 'POST':
+        data = request.json or {}
+        tasks = storage.load_data()
+        tasks.append({
+            "date": data.get("date"),
+            "time": data.get("time", ""),
+            "content": data.get("content"),
+            "note": data.get("note", ""),
+            "reminded": False,
+            "photos": [],
+            "photo_notes": []
+        })
+        storage.save_data(tasks)
+        return jsonify({"status": "success"}), 200
+    else:
+        return jsonify(storage.load_data()), 200
+
+@app.route('/api/web-delete', methods=['POST'])
+def web_delete():
+    data = request.json or {}
+    tasks = storage.load_data()
+    updated = [t for t in tasks if not (t.get("date") == data.get("date") and t.get("time") == data.get("time") and t.get("content") == data.get("content"))]
+    storage.save_data(updated)
+    return jsonify({"status": "success"}), 200
+
+@app.route('/api/web-edit', methods=['POST'])
+def web_edit():
+    data = request.json or {}
+    tasks = storage.load_data()
+    for t in tasks:
+        if t.get("date") == data.get("old_date") and t.get("time") == data.get("old_time") and t.get("content") == data.get("old_content"):
+            t["date"] = data.get("new_date")
+            t["time"] = data.get("new_time", "")
+            t["content"] = data.get("new_content")
+            t["note"] = data.get("new_note", "")
+            break
+    storage.save_data(tasks)
+    return jsonify({"status": "success"}), 200
+
+@app.route('/api/web-photo', methods=['POST'])
+def web_photo():
+    data = request.json or {}
+    tasks = storage.load_data()
+    for t in tasks:
+        if t.get("date") == data.get("date") and t.get("time") == data.get("time") and t.get("content") == data.get("content"):
+            if "photos" not in t: t["photos"] = []
+            if "photo_notes" not in t: t["photo_notes"] = []
+            
+            raw_path = data.get("path", "").strip()
+            # 🔧 修正：統一將雙反斜線或單反斜線轉回標準 Windows 檔案路徑
+            clean_path = raw_path.replace('/', '\\')
+            
+            t["photos"].append(clean_path)
+            desc = data.get("desc", "無解說")
+            t["photo_notes"].append(desc if desc.strip() != "" else "無解說")
+            break
+    storage.save_data(tasks)
+    return jsonify({"status": "success"}), 200
+
+@app.route('/api/web-photo-update', methods=['POST'])
+def web_photo_update():
+    data = request.json or {}
+    tasks = storage.load_data()
+    idx = data.get("photo_index")
+    for t in tasks:
+        if t.get("date") == data.get("date") and t.get("time") == data.get("time") and t.get("content") == data.get("content"):
+            if "photos" in t and idx < len(t["photos"]):
+                raw_path = data.get("new_path", "").strip()
+                t["photos"][idx] = raw_path.replace('/', '\\')
+            
+            if "photo_notes" not in t: t["photo_notes"] = ["無解說"] * len(t["photos"])
+            while len(t["photo_notes"]) < len(t["photos"]):
+                t["photo_notes"].append("無解說")
+                
+            if idx < len(t["photo_notes"]):
+                t["photo_notes"][idx] = data.get("new_desc", "無解說")
+            break
+    storage.save_data(tasks)
+    return jsonify({"status": "success"}), 200
+
+@app.route('/api/web-photo-delete', methods=['POST'])
+def web_photo_delete():
+    data = request.json or {}
+    tasks = storage.load_data()
+    idx = data.get("photo_index")
+    for t in tasks:
+        if t.get("date") == data.get("date") and t.get("time") == data.get("time") and t.get("content") == data.get("content"):
+            if "photos" in t and idx < len(t["photos"]):
+                t["photos"].pop(idx)
+            if "photo_notes" in t and idx < len(t["photo_notes"]):
+                t["photo_notes"].pop(idx)
+            
+            if not t.get("photos") or len(t["photos"]) == 0:
+                t["photos"] = []
+                t["photo_notes"] = []
+            break
+    storage.save_data(tasks)
+    return jsonify({"status": "success"}), 200
 
 @app.route('/api/view-photo', methods=['GET'])
 def view_photo():
-    file_path = request.args.get('path', '').strip()
-    if not file_path:
-        return "Missing path", 400
-    file_path = file_path.strip('"').strip("'")
-    if os.path.exists(file_path) and os.path.isfile(file_path):
-        try: return send_file(file_path)
-        except Exception as e: return f"Error: {str(e)}", 500
-    else: return "Not found", 404
-
-@app.route('/api/tasks', methods=['GET'])
-def get_tasks():
-    return jsonify(storage.load_data())
-
-@app.route('/api/tasks', methods=['POST'])
-def add_task():
-    try:
-        data = request.json
-        tasks = storage.load_data()
-        new_task = {
-            "date": str(data.get("date", "")).strip(),
-            "time": str(data.get("time", "")).strip(), # 儲存空字串代表未設置時間
-            "content": str(data.get("content", "")).strip(),
-            "note": str(data.get("note", "")).strip(),
-            "photos": [], "photo_notes": [], "reminded": False
-        }
-        tasks.append(new_task)
-        storage.save_data(tasks)
-        return jsonify({"status": "success"}), 201
-    except Exception as e: return jsonify({"error": str(e)}), 500
-
-@app.route('/api/web-delete', methods=['POST'])
-def delete_task():
-    try:
-        data = request.json or {}
-        target_date = str(data.get("date", "")).strip()
-        target_time = str(data.get("time", "")).strip()
-        target_content = str(data.get("content", "")).strip()
-        
-        tasks = storage.load_data()
-        updated_tasks = [t for t in tasks if not (str(t.get("date", "")).strip() == target_date and str(t.get("time", "")).strip() == target_time and str(t.get("content", "")).strip() == target_content)]
-        storage.save_data(updated_tasks)
-        return jsonify({"status": "success"}), 200
-    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/api/web-edit', methods=['POST'])
-def edit_task():
-    try:
-        data = request.json or {}
-        old_date = str(data.get("old_date", "")).strip()
-        old_time = str(data.get("old_time", "")).strip()
-        old_content = str(data.get("old_content", "")).strip()
-        
-        tasks = storage.load_data()
-        for task in tasks:
-            if (str(task.get("date", "")).strip() == old_date and str(task.get("time", "")).strip() == old_time and str(task.get("content", "")).strip() == old_content):
-                task["date"] = str(data.get("new_date", task.get("date", ""))).strip()
-                task["time"] = str(data.get("new_time", "")).strip() # 完美更新空字串或新設定的時間
-                task["content"] = str(data.get("new_content", task.get("content", ""))).strip()
-                task["note"] = str(data.get("new_note", task.get("note", ""))).strip()
-                task["reminded"] = False 
-                break
-        storage.save_data(tasks)
-        return jsonify({"status": "success"}), 200
-    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/api/web-photo', methods=['POST'])
-def add_photo():
-    try:
-        data = request.json or {}
-        target_date = str(data.get("date", "")).strip()
-        target_time = str(data.get("time", "")).strip()
-        target_content = str(data.get("content", "")).strip()
-        
-        tasks = storage.load_data()
-        for task in tasks:
-            if (str(task.get("date", "")).strip() == target_date and str(task.get("time", "")).strip() == target_time and str(task.get("content", "")).strip() == target_content):
-                if "photos" not in task: task["photos"] = []
-                if "photo_notes" not in task: task["photo_notes"] = []
-                if len(task["photos"]) >= 10: return jsonify({"status": "error", "message": "已達10筆上限"}), 200
-                
-                task["photos"].append(str(data.get("path", "")).strip())
-                task["photo_notes"].append(str(data.get("desc", "無解說")).strip())
-                break
-        storage.save_data(tasks)
-        return jsonify({"status": "success"}), 200
-    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 200
-
-@app.route('/api/web-photo-update', methods=['POST'])
-def update_photo():
-    try:
-        data = request.json or {}
-        t_date = str(data.get("date", "")).strip()
-        t_time = str(data.get("time", "")).strip()
-        t_content = str(data.get("content", "")).strip()
-        p_index = data.get("photo_index")
-        
-        tasks = storage.load_data()
-        for task in tasks:
-            if (str(task.get("date", "")).strip() == t_date and str(task.get("time", "")).strip() == t_time and str(task.get("content", "")).strip() == t_content):
-                if 0 <= p_index < len(task.get("photos", [])):
-                    task["photos"][p_index] = str(data.get("new_path", "")).strip()
-                    task["photo_notes"][p_index] = str(data.get("new_desc", "無解說")).strip()
-                    break
-        storage.save_data(tasks)
-        return jsonify({"status": "success"}), 200
-    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/api/web-photo-delete', methods=['POST'])
-def delete_photo():
-    try:
-        data = request.json or {}
-        t_date = str(data.get("date", "")).strip()
-        t_time = str(data.get("time", "")).strip()
-        t_content = str(data.get("content", "")).strip()
-        p_index = data.get("photo_index")
-        
-        tasks = storage.load_data()
-        for task in tasks:
-            if (str(task.get("date", "")).strip() == t_date and str(task.get("time", "")).strip() == t_time and str(task.get("content", "")).strip() == t_content):
-                if 0 <= p_index < len(task.get("photos", [])):
-                    task["photos"].pop(p_index)
-                    task["photo_notes"].pop(p_index)
-                    break
-        storage.save_data(tasks)
-        return jsonify({"status": "success"}), 200
-    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
+    photo_path = request.args.get('path', '')
+    # 🔧 修正：解碼並移除 Windows 可能在 URL 傳輸中被加上的前後引號
+    photo_path = photo_path.strip('"').strip("'")
+    if os.path.exists(photo_path):
+        return send_file(photo_path)
+    return jsonify({"error": "File not found"}), 404
 
 @app.route('/api/web-remind', methods=['POST'])
 def web_remind():
@@ -1034,22 +952,15 @@ def get_monthly_review():
     try:
         target_month = request.args.get('month', '').strip() 
         clean_target = target_month.replace("-", "") 
-        
         tasks = storage.load_data()
         filtered_tasks = []
-        
         for task in tasks:
             clean_date = str(task.get("date", "")).replace("-", "") 
             if clean_date.startswith(clean_target):
                 filtered_tasks.append(task)
-                
         return jsonify(filtered_tasks), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    print("=====================================================")
-    print("🌐 TIMETRO 自由清除提醒時間完全修復版啟動！")
-    print("🔗 請開啟瀏覽器前往：http://127.0.0.1:5001")
-    print("=====================================================")
-    app.run(host='127.0.0.1', port=5001, debug=False)
+    app.run(host='127.0.0.1', port=5001, debug=True)
