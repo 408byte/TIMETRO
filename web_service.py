@@ -8,7 +8,7 @@ app = Flask(__name__)
 CORS(app) 
 
 # =====================================================
-# 🌐 網頁 HTML 前端：修正按鈕擠壓與相片顯示路徑問題
+# 🌐 網頁 HTML 前端：行程概覽恆常顯示，僅回顧牆點擊後出現
 # =====================================================
 HTML_TEMPLATE = r"""
 <!DOCTYPE html>
@@ -17,7 +17,7 @@ HTML_TEMPLATE = r"""
     <meta charset="UTF-8">
     <title>TIMETRO 行事曆助手 — 完全版</title>
     <style>
-        /* 🌍 全域初始化：強制所有元素寬度計算包含 Padding，防止滿版時爆出右邊邊界 */
+        /* 🌍 全域初始化 */
         * { box-sizing: border-box; }
 
         body { 
@@ -31,7 +31,6 @@ HTML_TEMPLATE = r"""
             overflow: hidden;
         }
 
-        /* 🚀 寬幅滿版核心：拿掉 800px 限制，寬度貼緊 100%，並設定一個舒適的左右極限留白 */
         .container { 
             display: flex;
             width: 100%; 
@@ -41,107 +40,256 @@ HTML_TEMPLATE = r"""
             background: #fff;
         }
 
-        h1, h2 { color: #4e73df; }
+        h1, h2 { color: #4e73df; margin-top: 0; }
         
-        /* 讓輸入表單自動拉滿外框 */
+        /* 表單與輸入框樣式 */
         form { display: grid; gap: 10px; margin-bottom: 25px; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e3e6f0; width: 100%; }
         input, textarea, button { padding: 10px; border: 1px solid #d1d3e2; border-radius: 6px; font-size: 1em; width: 100%; }
-        
-        /* 搜尋按鈕與清除按鈕不隨便拉成滿版，保持精緻的寬度 */
-        .search-box input { flex: 1; width: auto; }
-        .search-box button { width: auto; }
         
         button { background-color: #4e73df; color: white; border: none; cursor: pointer; font-weight: bold; }
         button:hover { background-color: #2e59d9; }
         .search-box { display: flex; gap: 10px; margin-bottom: 20px; width: 100%; }
         #tripList { padding: 0; width: 100%; }
         
+        /* 左側列表行程樣式 */
         .trip-item { background: #fff; border: 1px solid #e3e6f0; padding: 15px; margin-bottom: 12px; border-radius: 8px; list-style: none; box-shadow: 0 2px 4px rgba(0,0,0,0.02); width: 100%; }
         .trip-item-header { display: flex; justify-content: space-between; align-items: center; color: #4e73df; font-weight: bold; }
-        .trip-id-badge { background-color: #5a5c69; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; width: auto; }
         .trip-item-content { font-weight: bold; font-size: 1.1em; margin-top: 8px; color: #2e2f37; }
         .trip-item-note { color: #6e707e; font-size: 0.9em; margin-top: 4px; }
-        #reviewList { display: block; padding: 0; list-style: none; margin-top: 0; width: 100%; }
         
-        /* 📅 響應式行事曆網格：確保在寬螢幕和窄螢幕上都能自適應 */
-        .review-calendar { display: grid; gap: 10px; width: 100%; overflow-x: auto; }
-        .calendar-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-weight: bold; color: #4e73df; margin-bottom: 6px; min-width: 700px; }
-        .calendar-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; min-width: 700px; }
-        
-        .calendar-day { min-height: 120px; background: #f9fbff; border: none; border-radius: 12px; padding: 10px; box-shadow: none; display: flex; flex-direction: column; justify-content: flex-start; }
-        .calendar-day.empty { background: transparent; border: none; box-shadow: none; }
-        .day-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
-        .day-number { font-size: 0.9em; font-weight: bold; color: #4e73df; }
-        .day-event-title { background: rgba(78, 115, 223, 0.12); color: #1f2f79; border-radius: 999px; padding: 4px 8px; font-size: 0.82em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-        .day-event-title:hover { background: rgba(78, 115, 223, 0.18); }
-        .day-event-note { color: #6e707e; font-size: 0.8em; line-height: 1.2; margin-top: 4px; }
-        .day-photos-selection { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 8px; }
-        .photo-toggle { display: block; position: relative; border-radius: 8px; overflow: hidden; border: 1px solid rgba(78, 115, 223, 0.18); }
-        .photo-toggle input { position: absolute; top: 6px; left: 6px; z-index: 2; width: 16px; height: 16px; accent-color: #4e73df; }
-        .photo-toggle img { display: block; width: 100%; height: 60px; object-fit: cover; }
-        .photo-toggle.checked { box-shadow: 0 0 0 2px rgba(78, 115, 223, 0.28); }
-        .day-event-photos { margin-top: 8px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
-        .day-event-photos img { width: 100%; height: 60px; object-fit: cover; border-radius: 6px; }
-        .photo-limit-note { color: #6e707e; font-size: 0.75em; margin-top: 4px; }
-        .calendar-note { color: #4e73df; font-size: 0.9em; margin-top: 6px; }
-        
-        /* 📸 相片牆網格樣式 */
+        /* 左側相片牆小網格樣式 */
         .trip-photos { margin-top: 15px; border-top: 1px dashed #e3e6f0; padding-top: 12px; width: 100%; }
-        .review-photos { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 12px; width: 100%; }
-        .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 8px; width: 100%; }
-        .photo-item { background: #f8f9fa; border: 1px solid #e3e6f0; padding: 8px; border-radius: 8px; display: flex; flex-direction: column; box-shadow: 0 2px 4px rgba(0,0,0,0.03); position: relative; }
-        .photo-item img { width: 100%; height: 180px; object-fit: cover; display: block; border-radius: 6px; transition: transform 0.2s; }
-        .photo-item img:hover { transform: scale(1.05); }
-        .photo-grid-desc-text { font-size: 0.85em; color: #333; font-weight: bold; line-height: 1.3; margin-bottom: 8px; word-break: break-all; }
-        
-        /* 相片內部的微型控制鈕 */
+        .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-top: 8px; width: 100%; }
+        .photo-item { background: #f8f9fa; border: 1px solid #e3e6f0; padding: 8px; border-radius: 8px; display: flex; flex-direction: column; position: relative; }
+        .photo-item img { width: 100%; height: 100px; object-fit: cover; display: block; border-radius: 6px; }
+        .photo-grid-desc-text { font-size: 0.82em; color: #555; font-weight: bold; margin-bottom: 6px; word-break: break-all; }
         .photo-actions { display: flex; gap: 4px; margin-top: auto; border-top: 1px solid #eaecf4; padding-top: 6px; justify-content: flex-end; }
-        .btn-photo-mini { font-size: 0.75em; padding: 3px 6px; border-radius: 4px; font-weight: normal; width: auto; }
+        .btn-photo-mini { font-size: 0.75em; padding: 3px 6px; border-radius: 4px; width: auto; }
 
-        /* 🛠️ 修正：控制按鈕底座，允許內容自然排開 */
-        .action-container { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            margin-top: 12px; 
-            border-top: 1px solid #f1f3f9; 
-            padding-top: 10px; 
-            width: 100%; 
-            gap: 12px;
-        }
+        /* 行程控制鈕底座 */
+        .action-container { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; border-top: 1px solid #f1f3f9; padding-top: 10px; width: 100%; gap: 12px; }
         .btn-danger { background-color: #e74a3b; width: auto; }
         .btn-danger:hover { background-color: #be2617; }
         .btn-success { background-color: #1cc88a; width: auto; }
         .btn-success:hover { background-color: #13855c; }
+        .btn-group { display: flex; gap: 8px; align-items: center; width: auto; flex-shrink: 0; }
+
+        /* =====================================================
+           📅 行程概覽 (Calendar Overview) - 保持恆常顯示
+           ==================================================== */
+        .calendar-section {
+            background: #ffffff;
+            border: 1px solid #e3e6f0;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.01);
+            width: 100%;
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 6px;
+            margin-top: 10px;
+        }
+        .calendar-weekday {
+            text-align: center;
+            font-weight: bold;
+            font-size: 0.85em;
+            color: #4e73df;
+            padding: 5px 0;
+            border-bottom: 2px solid #eaecf4;
+        }
+        .calendar-day {
+            min-height: 75px;
+            background: #f8f9fa;
+            border: 1px solid #e3e6f0;
+            border-radius: 6px;
+            padding: 4px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+        .calendar-day.other-month { opacity: 0.35; background: #e9ecef; }
+        .calendar-day.today { background: #fff3cd; border-color: #f6c23e; }
+        .calendar-day-num { font-size: 0.82em; font-weight: bold; color: #6e707e; margin-bottom: 3px; }
+        .calendar-day.today .calendar-day-num { color: #b7791f; }
+        .calendar-day-events {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            overflow-y: auto;
+            max-height: 52px;
+        }
+        .calendar-event-dot {
+            font-size: 0.72em;
+            background: #4e73df;
+            color: white;
+            padding: 1px 4px;
+            border-radius: 3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .calendar-event-dot.has-photo { background: #1cc88a; }
+
+        /* =====================================================
+           📸 回顧展照片牆區塊 (預設隱藏)
+           ===================================================== */
+        #reviewList { 
+            width: 100%; 
+            margin-top: 10px; 
+            display: none; /* 💡 預設隱藏，點選按鈕後才顯示 */
+        }
         
-        /* 🛠️ 修正：讓按鈕群組寬度自動，不壓縮彼此 */
-        .btn-group { 
-            display: flex; 
-            gap: 8px; 
-            align-items: center; 
-            width: auto; 
-            flex-shrink: 0;
+        /* 日期大標題 */
+        .review-date-heading {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #2e59d9;
+            background: #eaecf4;
+            padding: 8px 16px;
+            border-radius: 8px;
+            margin-top: 25px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-left: 5px solid #4e73df;
+            width: 100%;
+        }
+        .review-date-heading:first-child { margin-top: 5px; }
+
+        /* 寬度排版 */
+        .gallery-grid-row { 
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); 
+            gap: 15px; 
+            width: 100%; 
+            padding: 5px 0;
+        }
+        @media (max-width: 950px) {
+            .gallery-grid-row { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 650px) {
+            .gallery-grid-row { grid-template-columns: 1fr; }
         }
 
-        /* 一頁式彈窗樣式 (Modal UI) */
+        /* 每一組照片與手帳的卡片盒 */
+        .diary-card-combo {
+            display: flex;
+            flex-direction: column;
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 12px;
+            border: 1px solid #e3e6f0;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.03);
+            gap: 10px;
+            width: 100%;
+            align-items: center;
+            justify-content: flex-start;
+        }
+
+        /* 拍立得卡片框 */
+        .polaroid-card {
+            background: #ffffff;
+            padding: 10px 10px 32px 10px; 
+            border-radius: 4px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+            width: 100%;
+            max-width: 240px;
+            position: relative;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: 1px solid #eeeeee;
+        }
+        .polaroid-card img {
+            width: 100%;
+            height: auto;
+            max-height: 200px;
+            object-fit: contain;
+            background-color: #fafafa;
+            border: 1px solid rgba(0, 0, 0, 0.03);
+            display: block;
+        }
+        .polaroid-footer-text {
+            position: absolute;
+            bottom: 6px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-family: 'Courier New', Courier, monospace, 'PMingLiU';
+            font-weight: bold;
+            font-size: 0.78em;
+            color: #6e707e;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 0 6px;
+        }
+
+        /* 📝 撕線手帳日記框 */
+        .notebook-caption-box {
+            width: 100%;
+            background-color: #fffdf8; 
+            border: 1px solid #e5ddc8;
+            border-radius: 6px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+            position: relative;
+            padding: 10px 10px 10px 26px; 
+            min-height: 80px;
+            display: flex;
+            flex-direction: column;
+            background-image: linear-gradient(#e5ddc8 1px, transparent 1px);
+            background-size: 100% 22px;
+            line-height: 22px;
+        }
+        .notebook-caption-box::before {
+            content: "";
+            position: absolute;
+            left: 15px;
+            top: 0;
+            width: 1.5px;
+            height: 100%;
+            background-color: #ff9b9b; 
+            opacity: 0.6;
+        }
+        .notebook-title {
+            font-size: 0.9em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 2px;
+            line-height: 22px;
+            border-bottom: 1.5px solid #4e73df;
+            display: inline-block;
+            width: fit-content;
+        }
+        .notebook-desc-text {
+            font-size: 0.85em;
+            color: #4a4a4a;
+            font-weight: 500;
+            word-break: break-all;
+            white-space: pre-wrap;
+            margin-top: 2px;
+            line-height: 22px;
+        }
+
+        /* 其他彈窗與佈局結構 */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
         .modal-content { background-color: white; padding: 25px; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
         .modal-header { font-size: 1.3em; font-weight: bold; color: #4e73df; margin-bottom: 15px; border-bottom: 1px solid #e3e6f0; padding-bottom: 10px; }
         .modal-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px; }
         .modal-buttons button { width: auto; }
         
-        /* 橫向排列輸入框與清除鈕 */
         .time-input-container { display: flex; gap: 8px; align-items: center; width: 100%; }
         .time-input-container input { flex: 1; }
         .time-input-container button { width: auto; white-space: nowrap; }
 
-        /* ⭕ 新增左側欄樣式 */
         .left-panel { width: 35%; height: 100%; padding: 24px; box-sizing: border-box; background-color: #ffffff; border-right: 2px solid #e3e6f0; overflow-y: auto; }
-        
-        /* ⭕ 新增右側欄樣式 */
         .right-panel { width: 65%; height: 100%; padding: 24px; box-sizing: border-box; background-color: #f8fafc; overflow-y: auto; }
 
-        /* 🛠️ 修正：讓所有功能按鈕字體舒服展開，拒絕擠壓換行，留白充裕 */
         .trip-item button, .left-panel button { 
             display: inline-flex; 
             align-items: center; 
@@ -159,7 +307,7 @@ HTML_TEMPLATE = r"""
     <div class="container">
         <div class="left-panel">
             <h1>📅 TIMETRO 行事曆助手</h1>
-            <div style="padding: 10px; margin-bottom: 12px; background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; border-radius: 6px;">
+            <div style="padding: 10px; margin-bottom: 12px; background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; border-radius: 6px; font-size:0.9em;">
                 目前頁面由 <strong>web_service.py</strong> 提供，請使用 <a href="http://127.0.0.1:5001" target="_blank">http://127.0.0.1:5001</a> 開啟。
             </div>
             
@@ -198,12 +346,18 @@ HTML_TEMPLATE = r"""
             <div class="search-box">
                 <input type="month" id="reviewMonthInput" style="flex: 1;">
                 <button type="button" id="reviewBtn" style="background-color: #1cc88a;">生成月度回顧展</button>
-                <button type="button" id="downloadReviewBtn" style="background-color: #f6c23e; color: #000;" disabled>下載回顧</button>
+                <button type="button" id="downloadReviewBtn" style="background-color: #f6c23e; color: #000;" disabled>下載回顧展</button>
                 <select id="downloadFormatSelect" style="border-radius:6px; padding:0 8px; width:90px;">
                     <option value="png">PNG</option>
                     <option value="jpg">JPG</option>
                 </select>
             </div>
+
+            <div class="calendar-section">
+                <h3 id="calendarTitle" style="margin: 0 0 10px 0; color: #4e73df; font-size: 1.1em;">📊 行程概覽</h3>
+                <div class="calendar-grid" id="calendarGrid"></div>
+            </div>
+
             <div id="reviewList"></div>
         </div>
     </div>
@@ -219,7 +373,7 @@ HTML_TEMPLATE = r"""
                 <label style="font-weight: bold; font-size: 0.9em; color: #5a5c69;">📅 日期 (必須為 YYYY-MM-DD)</label>
                 <input type="text" id="editDate" placeholder="YYYY-MM-DD" required>
                 
-                <label style="font-weight: bold; font-size: 0.9em; color: #5a5c69;">⏰ 設置提醒時間 (為空則代表不提醒)</label>
+                <label style="font-weight: bold; font-size: 0.9em; color: #5a5c69;">⏰ 設置提醒時間</label>
                 <div class="time-input-container" style="margin-bottom: 10px;">
                     <input type="time" id="editTime" style="flex: 1;">
                     <button type="button" onclick="document.getElementById('editTime').value=''" style="background-color: #e74a3b; padding: 9px; font-size: 0.85em;">❌ 取消設置</button>
@@ -279,7 +433,6 @@ HTML_TEMPLATE = r"""
         let currentReviewMonth = '';
         const today = new Date();
 
-        // 🔧 內部輔助：處理相片 URL 的特殊反斜線，防止傳輸損壞
         function getPhotoUrl(path) {
             if (/^https?:\/\//i.test(path) || /^\/\//.test(path) || path.startsWith('data:')) {
                 return path;
@@ -294,7 +447,22 @@ HTML_TEMPLATE = r"""
             const reviewList = document.getElementById('reviewList');
 
             if (reviewMonthInput) {
+                // 預設填入當前月份
                 reviewMonthInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+                
+                // 💡 當使用者切換月份選單時：
+                reviewMonthInput.addEventListener('change', () => {
+                    const selectedMonth = reviewMonthInput.value;
+                    if (selectedMonth) {
+                        // 1. 始終立刻渲染上方的「行程概覽」日曆格子
+                        updateCalendarViewOnly(selectedMonth);
+                    }
+                    // 2. 只有下方的拍立得照片與日記方塊要隱藏起來
+                    reviewList.style.display = 'none';
+                    downloadReviewBtn.disabled = true;
+                });
+
+                // 💡 點擊「生成月度回顧展」按鈕
                 reviewBtn.addEventListener('click', () => {
                     const selectedMonth = reviewMonthInput.value;
                     if (!selectedMonth) {
@@ -305,81 +473,81 @@ HTML_TEMPLATE = r"""
                     fetch(`${BASE_URL}/monthly-review?month=${selectedMonth}`)
                         .then(res => res.json())
                         .then(data => {
+                            // 同步確保最上方的行程概覽格子也是最新狀態
+                            renderCalendarGrid(selectedMonth, data);
+
                             reviewList.innerHTML = "";
-                            if (data.length === 0) {
-                                reviewList.innerHTML = `<div class="no-result">找不到該月份的任何行程紀錄。</div>`;
+                            
+                            // 篩選有照片的行程
+                            const photoTrips = data.filter(trip => trip.photos && trip.photos.length > 0);
+                            if (photoTrips.length === 0) {
+                                reviewList.innerHTML = `<div style="text-align:center; padding:30px; color:#858796;">📸 該月行程中尚未新增任何相片解說日記喔！</div>`;
+                                reviewList.style.display = 'block'; 
                                 downloadReviewBtn.disabled = true;
                                 currentReviewMonth = '';
                                 return;
                             }
 
-                            const tripsByDay = {};
-                            data.forEach(trip => {
-                                const day = parseInt(trip.date.split('-')[2], 10);
-                                if (!tripsByDay[day]) tripsByDay[day] = [];
-                                tripsByDay[day].push(trip);
+                            // 按日期分組
+                            const groupedByDate = {};
+                            photoTrips.forEach(trip => {
+                                const d = trip.date;
+                                if (!groupedByDate[d]) {
+                                    groupedByDate[d] = [];
+                                }
+                                groupedByDate[d].push(trip);
                             });
 
-                            const [year, month] = selectedMonth.split('-').map(num => parseInt(num, 10));
-                            const firstDayOfMonth = new Date(year, month - 1, 1);
-                            const totalDays = new Date(year, month, 0).getDate();
-                            const startWeekday = firstDayOfMonth.getDay();
-                            const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+                            const sortedDates = Object.keys(groupedByDate).sort();
+                            const galleryHTML = [];
+                            galleryHTML.push('<div id="captureContainer" style="padding:5px;">');
 
-                            const calendarHTML = [];
-                            calendarHTML.push('<div class="review-calendar">');
-                            calendarHTML.push('<div class="calendar-weekdays">');
-                            weekdays.forEach(dayName => calendarHTML.push(`<div>${dayName}</div>`));
-                            calendarHTML.push('</div>');
-                            calendarHTML.push('<div class="calendar-days">');
+                            sortedDates.forEach(dateStr => {
+                                galleryHTML.push(`<div class="review-date-heading">📅 ${dateStr}</div>`);
+                                galleryHTML.push('<div class="gallery-grid-row">');
 
-                            for (let blank = 0; blank < startWeekday; blank++) {
-                                calendarHTML.push('<div class="calendar-day empty"></div>');
-                            }
+                                const tripsOnDate = groupedByDate[dateStr];
+                                tripsOnDate.forEach(trip => {
+                                    const timeDisplay = trip.time ? ` ⏰ ${trip.time}` : '';
+                                    const footerTimeText = `${trip.date}${timeDisplay}`;
 
-                            for (let day = 1; day <= totalDays; day++) {
-                                const dayTrips = tripsByDay[day] || [];
-                                calendarHTML.push('<div class="calendar-day">');
-                                calendarHTML.push('<div class="day-row">');
-                                calendarHTML.push(`<div class="day-number">${day}</div>`);
-                                if (dayTrips.length > 0) {
-                                    dayTrips.forEach(trip => {
-                                        calendarHTML.push(`<div class="day-event-title">${trip.content}</div>`);
+                                    trip.photos.forEach((p, idx) => {
+                                        const pPath = (typeof p === 'object' && p !== null) ? p.path : p;
+                                        const src = getPhotoUrl(pPath);
+                                        
+                                        let pDesc = "";
+                                        if (trip.photo_notes && trip.photo_notes[idx]) {
+                                            pDesc = trip.photo_notes[idx].trim();
+                                        } else if (typeof p === 'object' && p !== null && p.desc) {
+                                            pDesc = p.desc.trim();
+                                        }
+
+                                        galleryHTML.push('<div class="diary-card-combo">');
+                                        
+                                        galleryHTML.push('<div class="polaroid-card">');
+                                        galleryHTML.push(`<img src="${src}" onerror="this.src='https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=320'; this.style.opacity='0.4';">`);
+                                        galleryHTML.push(`<div class="polaroid-footer-text">${footerTimeText}</div>`);
+                                        galleryHTML.push('</div>');
+
+                                        if (pDesc && pDesc !== "無解說" && pDesc !== "") {
+                                            galleryHTML.push('<div class="notebook-caption-box">');
+                                            galleryHTML.push(`<div class="notebook-title">✨ ${trip.content}</div>`);
+                                            galleryHTML.push(`<div class="notebook-desc-text">${pDesc}</div>`);
+                                            galleryHTML.push('</div>');
+                                        }
+                                        
+                                        galleryHTML.push('</div>');
                                     });
-                                }
-                                calendarHTML.push('</div>');
-                                if (dayTrips.length > 0) {
-                                    const notes = dayTrips.filter(trip => trip.note).map(trip => `<div class="day-event-note">${trip.note}</div>`).join('');
-                                    if (notes) {
-                                        calendarHTML.push(notes);
-                                    }
+                                });
 
-                                    const allPhotos = dayTrips.flatMap(trip => trip.photos || []);
-                                    if (allPhotos.length > 0) {
-                                        const photoSelectors = allPhotos.map((p, idx) => {
-                                            const pPath = (typeof p === 'object' && p !== null) ? p.path : p;
-                                            const src = getPhotoUrl(pPath);
-                                            return `<label class="photo-toggle checked" data-day="${day}" data-photo-index="${idx}">` +
-                                                `<input type="checkbox" checked data-day="${day}" data-photo-index="${idx}">` +
-                                                `<img src="${src}" alt="回顧圖" onerror="this.style.display='none';">` +
-                                                `</label>`;
-                                        }).join('');
-                                        const visiblePhotos = allPhotos.slice(0, 6).map((p, idx) => {
-                                            const pPath = (typeof p === 'object' && p !== null) ? p.path : p;
-                                            const src = getPhotoUrl(pPath);
-                                            return `<img src="${src}" alt="回顧圖" data-day="${day}" data-photo-index="${idx}" onerror="this.style.display='none';">`;
-                                        }).join('');
-                                        calendarHTML.push(`<div class="day-photos-selection">${photoSelectors}</div>`);
-                                        calendarHTML.push(`<div class="photo-limit-note">最多顯示 6 張圖片，取消勾選可隱藏。</div>`);
-                                        calendarHTML.push(`<div class="day-event-photos" data-day="${day}">${visiblePhotos}</div>`);
-                                    }
-                                }
-                                calendarHTML.push('</div>');
-                            }
+                                galleryHTML.push('</div>'); 
+                            });
 
-                            calendarHTML.push('</div>');
-                            calendarHTML.push('</div>');
-                            reviewList.innerHTML = calendarHTML.join('');
+                            galleryHTML.push('</div>'); 
+                            reviewList.innerHTML = galleryHTML.join('');
+                            
+                            // 顯示照片展覽牆
+                            reviewList.style.display = 'block'; 
                             downloadReviewBtn.disabled = false;
                             currentReviewMonth = selectedMonth;
                         })
@@ -388,113 +556,120 @@ HTML_TEMPLATE = r"""
 
                 downloadReviewBtn.addEventListener('click', () => {
                     if (!currentReviewMonth || !reviewList.innerHTML.trim()) {
-                        alert('請先生成月度回顧，再下載。');
+                        alert('請先生成月度回顧展，再下載。');
                         return;
                     }
                     downloadReviewImage(downloadFormatSelect.value || 'png');
                 });
-
-                reviewList.addEventListener('change', (event) => {
-                    const target = event.target;
-                    if (!target.matches('input[data-day][data-photo-index]')) return;
-                    const day = target.dataset.day;
-                    updateDayPhotoGrid(day);
-                });
             }
 
-            function updateDayPhotoGrid(day) {
-                const dayContainer = reviewList.querySelector(`.day-event-photos[data-day="${day}"]`);
-                if (!dayContainer) return;
-                const checkedInputs = Array.from(reviewList.querySelectorAll(`input[data-day="${day}"]:checked`));
-                const selectedPhotos = checkedInputs.slice(0, 6).map(input => {
-                    const idx = parseInt(input.dataset.photoIndex, 10);
-                    const label = input.closest('.photo-toggle');
-                    return label ? label.querySelector('img') : null;
-                }).filter(Boolean);
-                dayContainer.innerHTML = selectedPhotos.map(img => `<img src="${img.src}" alt="回顧圖" onerror="this.style.display='none';">`).join('');
-                Array.from(reviewList.querySelectorAll(`.photo-toggle[data-day="${day}"]`)).forEach(label => {
-                    const input = label.querySelector('input');
-                    label.classList.toggle('checked', input.checked);
-                });
-            }
-
-            function downloadReviewImage(format) {
-                if (typeof html2canvas !== 'function') {
-                    alert('無法載入 html2canvas，請確認網路連線或稍後再試。');
-                    return;
-                }
-
-                const exportContainer = reviewList.cloneNode(true);
-                exportContainer.querySelectorAll('.day-photos-selection, .photo-limit-note').forEach(el => el.remove());
-
-                const wrapper = document.createElement('div');
-                wrapper.style.position = 'fixed';
-                wrapper.style.left = '-9999px';
-                wrapper.style.top = '-9999px';
-                wrapper.style.opacity = '0';
-                wrapper.appendChild(exportContainer);
-                document.body.appendChild(wrapper);
-
-                const originalDayCells = Array.from(reviewList.querySelectorAll('.calendar-day'));
-                if (originalDayCells.length > 0) {
-                    let busiestIndex = 0;
-                    let maxCount = -1;
-                    originalDayCells.forEach((cell, idx) => {
-                        const cnt = cell.querySelectorAll('.day-event-title, .day-event-note, .day-event-photos img').length;
-                        if (cnt > maxCount) {
-                            maxCount = cnt;
-                            busiestIndex = idx;
-                        }
-                    });
-                    const exportCells = Array.from(exportContainer.querySelectorAll('.calendar-day'));
-                    const busiestExportCell = exportCells[busiestIndex] || exportCells[0];
-                    const monthMaxHeight = Math.ceil(busiestExportCell.scrollHeight || busiestExportCell.getBoundingClientRect().height || 120);
-                    exportCells.forEach(cell => {
-                        cell.style.height = `${monthMaxHeight}px`;
-                        cell.style.minHeight = 'auto';
-                        cell.style.flex = '0 0 auto';
-                        cell.style.overflow = 'visible';
-                        cell.style.boxSizing = 'border-box';
-                    });
-                    const exportWeekdays = exportContainer.querySelector('.calendar-weekdays');
-                    const exportDays = exportContainer.querySelector('.calendar-days');
-                    if (exportWeekdays) exportWeekdays.style.gridTemplateColumns = 'repeat(7, 1fr)';
-                    if (exportDays) exportDays.style.gridTemplateColumns = 'repeat(7, 1fr)';
-                }
-
-                const originalText = downloadReviewBtn.textContent;
-                downloadReviewBtn.disabled = true;
-                downloadReviewBtn.textContent = '準備中...';
-
-                html2canvas(exportContainer, { backgroundColor: '#f4f6f9', scale: 2 })
-                    .then(canvas => {
-                        const mime = format === 'jpg' ? 'image/jpeg' : 'image/png';
-                        const dataUrl = canvas.toDataURL(mime, 0.95);
-                        const link = document.createElement('a');
-                        link.href = dataUrl;
-                        link.download = `TIMETRO_${currentReviewMonth}_回顧.${format}`;
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                    })
-                    .catch(err => alert('下載圖片失敗：' + err))
-                    .finally(() => {
-                        document.body.removeChild(wrapper);
-                        downloadReviewBtn.disabled = false;
-                        downloadReviewBtn.textContent = originalText;
-                    });
-            }
-
+            // 初始同步載入
             fetchTasks();
             startReminderClock();
-
-            const autoReviewMonth = reviewMonthInput ? reviewMonthInput.value : '';
-            if (autoReviewMonth && reviewBtn) {
-                setTimeout(() => {
-                    reviewBtn.click();
-                }, 500);
-            }
         });
+
+        // 💡 專門用來單獨重新載入並渲染行程概覽格子的獨立函數
+        function updateCalendarViewOnly(yearMonthStr) {
+            fetch(`${BASE_URL}/monthly-review?month=${yearMonthStr}`)
+                .then(res => res.json())
+                .then(mdata => {
+                    renderCalendarGrid(yearMonthStr, mdata);
+                })
+                .catch(err => console.error("日曆渲染失敗:", err));
+        }
+
+        function renderCalendarGrid(yearMonthStr, monthTasks) {
+            const grid = document.getElementById('calendarGrid');
+            const title = document.getElementById('calendarTitle');
+            if (!grid) return;
+
+            grid.innerHTML = "";
+            const [year, month] = yearMonthStr.split('-').map(Number);
+            title.textContent = `📊 行程概覽 (${year}年 ${month}月)`;
+
+            const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+            weekdays.forEach(w => {
+                const div = document.createElement('div');
+                div.className = 'calendar-weekday';
+                div.textContent = w;
+                grid.appendChild(div);
+            });
+
+            const firstDayIdx = new Date(year, month - 1, 1).getDay();
+            const totalDays = new Date(year, month, 0).getDate();
+            const prevMonthTotalDays = new Date(year, month - 1, 0).getDate();
+
+            for (let i = firstDayIdx - 1; i >= 0; i--) {
+                const dayNum = prevMonthTotalDays - i;
+                const dayDiv = document.createElement('div');
+                dayDiv.className = 'calendar-day other-month';
+                dayDiv.innerHTML = `<div class="calendar-day-num">${dayNum}</div>`;
+                grid.appendChild(dayDiv);
+            }
+
+            for (let d = 1; d <= totalDays; d++) {
+                const currentLoopDateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                const dayDiv = document.createElement('div');
+                dayDiv.className = 'calendar-day';
+                
+                if (today.getFullYear() === year && (today.getMonth() + 1) === month && today.getDate() === d) {
+                    dayDiv.classList.add('today');
+                }
+
+                dayDiv.innerHTML = `<div class="calendar-day-num">${d}</div><div class="calendar-day-events" id="cal-events-${currentLoopDateStr}"></div>`;
+                grid.appendChild(dayDiv);
+
+                const dayEventsContainer = dayDiv.querySelector('.calendar-day-events');
+                const dayTasks = monthTasks.filter(t => t.date === currentLoopDateStr);
+                dayTasks.forEach(t => {
+                    const dot = document.createElement('div');
+                    dot.className = 'calendar-event-dot';
+                    if (t.photos && t.photos.length > 0) {
+                        dot.classList.add('has-photo');
+                    }
+                    const tStr = t.time ? `[${t.time}] ` : '';
+                    dot.textContent = `${tStr}${t.content}`;
+                    dot.title = t.content;
+                    dayEventsContainer.appendChild(dot);
+                });
+            }
+        }
+
+        function downloadReviewImage(format) {
+            if (typeof html2canvas !== 'function') {
+                const script = document.createElement('script');
+                script.src = 'https://html2canvas.hertzen.com/dist/html2canvas.min.js';
+                script.onload = () => downloadReviewImage(format);
+                document.head.appendChild(script);
+                return;
+            }
+
+            const targetElement = document.getElementById('captureContainer') || reviewList;
+            const originalText = downloadReviewBtn.textContent;
+            downloadReviewBtn.disabled = true;
+            downloadReviewBtn.textContent = '圖片繪製中...';
+
+            html2canvas(targetElement, { 
+                backgroundColor: '#f8fafc', 
+                scale: 2,
+                useCORS: true 
+            })
+            .then(canvas => {
+                const mime = format === 'jpg' ? 'image/jpeg' : 'image/png';
+                const dataUrl = canvas.toDataURL(mime, 0.95);
+                const link = document.createElement('a');
+                link.href = dataUrl;
+                link.download = `TIMETRO_${currentReviewMonth}_精美相片日記牆.${format}`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            })
+            .catch(err => alert('下載回顧圖片失敗：' + err))
+            .finally(() => {
+                downloadReviewBtn.disabled = false;
+                downloadReviewBtn.textContent = originalText;
+            });
+        }
 
         function fetchTasks() {
             fetch(`${BASE_URL}/tasks`)
@@ -502,6 +677,12 @@ HTML_TEMPLATE = r"""
                 .then(data => { 
                     allTasks = data; 
                     displayTrips(); 
+                    
+                    // 初始化讀取網頁時，立刻渲染預設月份的「行程概覽」日曆格子
+                    const rmInput = document.getElementById('reviewMonthInput');
+                    if (rmInput && rmInput.value) {
+                        updateCalendarViewOnly(rmInput.value);
+                    }
                 })
                 .catch(err => console.error("同步失敗:", err));
         }
@@ -524,18 +705,27 @@ HTML_TEMPLATE = r"""
                 alert("🎉 行程新增成功！");
                 addTripForm.reset();
                 fetchTasks();
+                
+                // 行程異動後，自動刷新日曆概覽格子
+                const rmInput = document.getElementById('reviewMonthInput');
+                if (rmInput && rmInput.value) { updateCalendarViewOnly(rmInput.value); }
+
+                const rList = document.getElementById('reviewList');
+                if (rList && rList.style.display === 'block') {
+                    document.getElementById('reviewBtn').click();
+                }
             });
         });
 
         function addPhotoToTaskDirectly(taskString) {
             const targetTrip = JSON.parse(decodeURIComponent(taskString));
             if (targetTrip.photos && targetTrip.photos.length >= 10) {
-                alert(`❌ 無法新增！【${targetTrip.content}】相片解說已達 10 筆上限！`);
+                alert(`❌ 無法新增！【${targetTrip.content}】相片已達 10 筆上限！`);
                 return;
             }
-            const photoPath = prompt(`📸 請輸入要為【${targetTrip.content}】新增的照片檔案路徑：\n(例如：C:\\images\\pic.jpg 或 圖片網址)`);
+            const photoPath = prompt(`📸 請輸入為【${targetTrip.content}】新增的照片路徑：\n(例如：C:\\images\\pic.jpg 或 網址)`);
             if (!photoPath || photoPath.trim() === "") return;
-            const photoDesc = prompt("💬 請輸入這張照片的文字解說（選填）：", "無解說");
+            const photoDesc = prompt("💬 請輸入文字解說（若留空或填無解說，回顧展將不顯示日記方框）：", "");
             
             fetch(`${BASE_URL}/web-photo`, {
                 method: 'POST',
@@ -545,24 +735,30 @@ HTML_TEMPLATE = r"""
                     time: targetTrip.time,
                     content: targetTrip.content,
                     path: photoPath.trim(),
-                    desc: photoDesc ? photoDesc.trim() : "無解說"
+                    desc: photoDesc ? photoDesc.trim() : ""
                 })
             })
             .then(res => res.json())
             .then(data => {
                 if (data.status === "success") {
-                    alert("📸 照片與文字解說已成功紀錄！");
+                    alert("📸 照片與解說已成功紀錄！");
                     fetchTasks();
-                } else {
-                    alert("❌ 錯誤：" + data.message);
-                }
+                    
+                    const rmInput = document.getElementById('reviewMonthInput');
+                    if (rmInput && rmInput.value) { updateCalendarViewOnly(rmInput.value); }
+
+                    const rList = document.getElementById('reviewList');
+                    if (rList && rList.style.display === 'block') {
+                        document.getElementById('reviewBtn').click();
+                    }
+                } else { alert("❌ 錯誤：" + data.message); }
             })
             .catch(err => alert("❌ 連線錯誤：" + err));
         }
 
         function deleteTrip(taskString) {
             const targetTrip = JSON.parse(decodeURIComponent(taskString));
-            if (confirm(`⚠️ 確定要刪除行程【${targetTrip.content}】嗎？此動作無法復原！`)) {
+            if (confirm(`⚠️ 確定要刪除行程【${targetTrip.content}】嗎？`)) {
                 fetch(`${BASE_URL}/web-delete`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -577,11 +773,16 @@ HTML_TEMPLATE = r"""
                     if (data.status === "success") {
                         alert("🗑️ 行程已成功刪除！");
                         fetchTasks();
-                    } else {
-                        alert("❌ 刪除失敗：" + data.message);
-                    }
-                })
-                .catch(err => alert("❌ 連線錯誤：" + err));
+                        
+                        const rmInput = document.getElementById('reviewMonthInput');
+                        if (rmInput && rmInput.value) { updateCalendarViewOnly(rmInput.value); }
+
+                        const rList = document.getElementById('reviewList');
+                        if (rList && rList.style.display === 'block') {
+                            document.getElementById('reviewBtn').click();
+                        }
+                    } else { alert("❌ 刪除失敗：" + data.message); }
+                });
             }
         }
 
@@ -601,15 +802,6 @@ HTML_TEMPLATE = r"""
 
         editTripForm.addEventListener('submit', function(event) {
             event.preventDefault();
-            const inputDate = document.getElementById('editDate').value.trim();
-            const inputTime = document.getElementById('editTime').value.trim();
-            const inputContent = document.getElementById('editContent').value.trim();
-            const inputNote = document.getElementById('editNote').value.trim();
-            const datePattern = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
-            if (!datePattern.test(inputDate)) {
-                alert("❌ 日期格式錯誤！\n請務必符合 YYYY-MM-DD 格式（例如：2026-05-20）");
-                return;
-            }
             fetch(`${BASE_URL}/web-edit`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -617,10 +809,10 @@ HTML_TEMPLATE = r"""
                     old_date: document.getElementById('editOldDate').value,
                     old_time: document.getElementById('editOldTime').value,
                     old_content: document.getElementById('editOldContent').value,
-                    new_date: inputDate,
-                    new_time: inputTime,
-                    new_content: inputContent,
-                    new_note: inputNote
+                    new_date: document.getElementById('editDate').value.trim(),
+                    new_time: document.getElementById('editTime').value.trim(),
+                    new_content: document.getElementById('editContent').value.trim(),
+                    new_note: document.getElementById('editNote').value.trim()
                 })
             })
             .then(res => res.json())
@@ -629,8 +821,14 @@ HTML_TEMPLATE = r"""
                     alert("📝 行程內容已成功更新！");
                     closeEditModal();
                     fetchTasks();
-                } else {
-                    alert("❌ 修改失敗：" + data.message);
+                    
+                    const rmInput = document.getElementById('reviewMonthInput');
+                    if (rmInput && rmInput.value) { updateCalendarViewOnly(rmInput.value); }
+
+                    const rList = document.getElementById('reviewList');
+                    if (rList && rList.style.display === 'block') {
+                        document.getElementById('reviewBtn').click();
+                    }
                 }
             });
         });
@@ -639,7 +837,7 @@ HTML_TEMPLATE = r"""
             document.getElementById('photoTripString').value = taskStr;
             document.getElementById('photoIndex').value = index;
             document.getElementById('photoEditPath').value = path;
-            document.getElementById('photoEditDesc').value = desc;
+            document.getElementById('photoEditDesc').value = desc === "無解說" ? "" : desc;
             photoEditModal.style.display = 'flex';
         }
 
@@ -647,20 +845,16 @@ HTML_TEMPLATE = r"""
 
         photoEditForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            const targetTrip = JSON.parse(decodeURIComponent(document.getElementById('photoTripString').value));
-            const pIndex = document.getElementById('photoIndex').value;
-            const newPath = document.getElementById('photoEditPath').value.trim();
-            const newDesc = document.getElementById('photoEditDesc').value.trim();
             fetch(`${BASE_URL}/web-photo-update`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    date: targetTrip.date,
-                    time: targetTrip.time,
-                    content: targetTrip.content,
-                    photo_index: parseInt(pIndex),
-                    new_path: newPath,
-                    new_desc: newDesc
+                    date: document.getElementById('photoTripString').value ? JSON.parse(decodeURIComponent(document.getElementById('photoTripString').value)).date : '',
+                    time: JSON.parse(decodeURIComponent(document.getElementById('photoTripString').value)).time,
+                    content: JSON.parse(decodeURIComponent(document.getElementById('photoTripString').value)).content,
+                    photo_index: parseInt(document.getElementById('photoIndex').value),
+                    new_path: document.getElementById('photoEditPath').value.trim(),
+                    new_desc: document.getElementById('photoEditDesc').value.trim()
                 })
             })
             .then(res => res.json())
@@ -669,8 +863,14 @@ HTML_TEMPLATE = r"""
                     alert("🖼️ 相片與解說已成功更新！");
                     closePhotoEditModal();
                     fetchTasks();
-                } else {
-                    alert("❌ 更新失敗：" + data.message);
+                    
+                    const rmInput = document.getElementById('reviewMonthInput');
+                    if (rmInput && rmInput.value) { updateCalendarViewOnly(rmInput.value); }
+
+                    const rList = document.getElementById('reviewList');
+                    if (rList && rList.style.display === 'block') {
+                        document.getElementById('reviewBtn').click();
+                    }
                 }
             });
         });
@@ -693,14 +893,16 @@ HTML_TEMPLATE = r"""
                     if(data.status === "success") {
                         alert("🗑️ 相片已成功移除！");
                         fetchTasks();
+                        
                         const rmInput = document.getElementById('reviewMonthInput');
-                        const rBtn = document.getElementById('reviewBtn');
-                        if (rmInput && rBtn && rmInput.value) { rBtn.click(); }
-                    } else {
-                        alert("❌ 移除失敗：" + data.message);
+                        if (rmInput && rmInput.value) { updateCalendarViewOnly(rmInput.value); }
+
+                        const rList = document.getElementById('reviewList');
+                        if (rList && rList.style.display === 'block') {
+                            document.getElementById('reviewBtn').click();
+                        }
                     }
-                })
-                .catch(err => alert("❌ 連線錯誤：" + err));
+                });
             }
         }
 
@@ -744,7 +946,7 @@ HTML_TEMPLATE = r"""
             tripList.innerHTML = "";
             const sortedTrips = getSortedAndFilteredTrips();
             if (sortedTrips.length === 0) {
-                tripList.innerHTML = `<li class="no-result">沒有找到任何行程記錄 📭</li>`;
+                tripList.innerHTML = `<li style="text-align:center; padding:20px; color:#858796; list-style:none;">沒有找到任何行程記錄 📭</li>`;
                 return;
             }
             sortedTrips.forEach((trip) => {
@@ -758,30 +960,21 @@ HTML_TEMPLATE = r"""
                 
                 let photosHTML = "";
                 if (trip.photos && trip.photos.length > 0) {
-                    photosHTML += `<div class="trip-photos"><h5>🖼️ 精選相片日記</h5><div class="photo-grid">`;
+                    photosHTML += `<div class="trip-photos"><h5 style="margin:0 0 5px 0; color:#4e73df;">🖼️ 精選相片日記</h5><div class="photo-grid">`;
                     trip.photos.forEach((p, pIdx) => {
                         const pPath = (typeof p === 'object' && p !== null) ? p.path : p;
-                        
-                        let pDesc = "無解說";
-                        if (trip.photo_notes && trip.photo_notes[pIdx]) {
-                            pDesc = trip.photo_notes[pIdx];
-                        } else if (typeof p === 'object' && p !== null && p.desc) {
-                            pDesc = p.desc;
-                        }
-
+                        let pDesc = (trip.photo_notes && trip.photo_notes[pIdx]) ? trip.photo_notes[pIdx] : "無解說";
                         const imgSrc = getPhotoUrl(pPath);
-
-                        // 轉義單引號防止 JS 傳參崩潰
                         const safePath = pPath.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
                         const safeDesc = pDesc.replace(/'/g, "\\'");
 
                         photosHTML += `
-                            <div class="photo-item" data-photo-idx="${pIdx}">
-                                <div class="photo-grid-desc-text">💬 <span class="txt-span">${pDesc}</span></div>
+                            <div class="photo-item">
+                                <div class="photo-grid-desc-text">💬 <span>${pDesc}</span></div>
                                 <img src="${imgSrc}" onerror="this.src='https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200'; this.style.opacity='0.5';">
                                 <div class="photo-actions">
-                                    <button type="button" class="btn-success btn-photo-mini inner-edit-btn" onclick="openPhotoEditModalDirectly('${serializedTrip}', ${pIdx}, '${safePath}', '${safeDesc}')">✏️ 更改</button>
-                                    <button type="button" class="btn-danger btn-photo-mini inner-del-btn" onclick="fireDeleteSinglePhoto('${serializedTrip}', ${pIdx})">🗑️</button>
+                                    <button type="button" class="btn-success btn-photo-mini" onclick="openPhotoEditModalDirectly('${serializedTrip}', ${pIdx}, '${safePath}', '${safeDesc}')">✏️ 更改</button>
+                                    <button type="button" class="btn-danger btn-photo-mini" onclick="fireDeleteSinglePhoto('${serializedTrip}', ${pIdx})">🗑️</button>
                                 </div>
                             </div>`;
                     });
@@ -818,7 +1011,7 @@ HTML_TEMPLATE = r"""
 """
 
 # =====================================================
-# 🐍 Flask 後端核心路由與相片路徑傳輸安全修正
+# 🐍 Flask 後端核心路由
 # =====================================================
 @app.route('/')
 def index():
@@ -875,12 +1068,11 @@ def web_photo():
             if "photo_notes" not in t: t["photo_notes"] = []
             
             raw_path = data.get("path", "").strip()
-            # 🔧 修正：統一將雙反斜線或單反斜線轉回標準 Windows 檔案路徑
             clean_path = raw_path.replace('/', '\\')
             
             t["photos"].append(clean_path)
-            desc = data.get("desc", "無解說")
-            t["photo_notes"].append(desc if desc.strip() != "" else "無解說")
+            desc = data.get("desc", "").strip()
+            t["photo_notes"].append(desc if desc != "" else "無解說")
             break
     storage.save_data(tasks)
     return jsonify({"status": "success"}), 200
@@ -897,11 +1089,10 @@ def web_photo_update():
                 t["photos"][idx] = raw_path.replace('/', '\\')
             
             if "photo_notes" not in t: t["photo_notes"] = ["無解說"] * len(t["photos"])
-            while len(t["photo_notes"]) < len(t["photos"]):
-                t["photo_notes"].append("無解說")
+            while len(t["photo_notes"]) < len(t["photos"]): t["photo_notes"].append("無解說")
                 
-            if idx < len(t["photo_notes"]):
-                t["photo_notes"][idx] = data.get("new_desc", "無解說")
+            desc = data.get("new_desc", "").strip()
+            t["photo_notes"][idx] = desc if desc != "" else "無解說"
             break
     storage.save_data(tasks)
     return jsonify({"status": "success"}), 200
@@ -913,14 +1104,8 @@ def web_photo_delete():
     idx = data.get("photo_index")
     for t in tasks:
         if t.get("date") == data.get("date") and t.get("time") == data.get("time") and t.get("content") == data.get("content"):
-            if "photos" in t and idx < len(t["photos"]):
-                t["photos"].pop(idx)
-            if "photo_notes" in t and idx < len(t["photo_notes"]):
-                t["photo_notes"].pop(idx)
-            
-            if not t.get("photos") or len(t["photos"]) == 0:
-                t["photos"] = []
-                t["photo_notes"] = []
+            if "photos" in t and idx < len(t["photos"]): t["photos"].pop(idx)
+            if "photo_notes" in t and idx < len(t["photo_notes"]): t["photo_notes"].pop(idx)
             break
     storage.save_data(tasks)
     return jsonify({"status": "success"}), 200
@@ -928,7 +1113,6 @@ def web_photo_delete():
 @app.route('/api/view-photo', methods=['GET'])
 def view_photo():
     photo_path = request.args.get('path', '')
-    # 🔧 修正：解碼並移除 Windows 可能在 URL 傳輸中被加上的前後引號
     photo_path = photo_path.strip('"').strip("'")
     if os.path.exists(photo_path):
         return send_file(photo_path)
@@ -945,7 +1129,8 @@ def web_remind():
                 storage.save_data(tasks)
                 break
         return jsonify({"status": "success"}), 200
-    except Exception: return jsonify({"status": "success"}), 200
+    except Exception: 
+        return jsonify({"status": "success"}), 200
 
 @app.route('/api/monthly-review', methods=['GET'])
 def get_monthly_review():
