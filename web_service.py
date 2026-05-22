@@ -21,24 +21,57 @@ HTML_TEMPLATE = r"""
     <meta charset="UTF-8">
     <title>TIMETRO 行事曆助手 — 完全版</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; color: #333; margin: 0; padding: 20px; }
-        .container { max-width: 800px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        /* 🌍 全域初始化：強制所有元素寬度計算包含 Padding，防止滿版時爆出右邊邊界 */
+        * { box-sizing: border-box; }
+
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: #f4f6f9; 
+            color: #333; 
+            margin: 0; 
+            padding: 0; 
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 🚀 寬幅滿版核心：拿掉 800px 限制，寬度貼緊 100%，並設定一個舒適的左右極限留白 */
+        .container { 
+            display: flex;
+            width: 100%; 
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+            background: #fff;
+        }
+
         h1, h2 { color: #4e73df; }
-        form { display: grid; gap: 10px; margin-bottom: 25px; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e3e6f0; }
-        input, textarea, button { padding: 10px; border: 1px solid #d1d3e2; border-radius: 6px; font-size: 1em; }
+        
+        /* 讓輸入表單自動拉滿外框 */
+        form { display: grid; gap: 10px; margin-bottom: 25px; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e3e6f0; width: 100%; }
+        input, textarea, button { padding: 10px; border: 1px solid #d1d3e2; border-radius: 6px; font-size: 1em; width: 100%; }
+        
+        /* 搜尋按鈕與清除按鈕不隨便拉成滿版，保持精緻的寬度 */
+        .search-box input { flex: 1; width: auto; }
+        .search-box button { width: auto; }
+        
         button { background-color: #4e73df; color: white; border: none; cursor: pointer; font-weight: bold; }
         button:hover { background-color: #2e59d9; }
-        .search-box { display: flex; gap: 10px; margin-bottom: 20px; }
-        #tripList { padding: 0; }
-        .trip-item { background: #fff; border: 1px solid #e3e6f0; padding: 15px; margin-bottom: 12px; border-radius: 8px; list-style: none; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .search-box { display: flex; gap: 10px; margin-bottom: 20px; width: 100%; }
+        #tripList { padding: 0; width: 100%; }
+        
+        .trip-item { background: #fff; border: 1px solid #e3e6f0; padding: 15px; margin-bottom: 12px; border-radius: 8px; list-style: none; box-shadow: 0 2px 4px rgba(0,0,0,0.02); width: 100%; }
         .trip-item-header { display: flex; justify-content: space-between; align-items: center; color: #4e73df; font-weight: bold; }
-        .trip-id-badge { background-color: #5a5c69; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; }
+        .trip-id-badge { background-color: #5a5c69; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; width: auto; }
         .trip-item-content { font-weight: bold; font-size: 1.1em; margin-top: 8px; color: #2e2f37; }
         .trip-item-note { color: #6e707e; font-size: 0.9em; margin-top: 4px; }
-        #reviewList { display: block; padding: 0; list-style: none; margin-top: 0; }
-        .review-calendar { display: grid; gap: 10px; }
-        .calendar-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-weight: bold; color: #4e73df; margin-bottom: 6px; }
-        .calendar-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+        #reviewList { display: block; padding: 0; list-style: none; margin-top: 0; width: 100%; }
+        
+        /* 📅 響應式行事曆網格：確保在寬螢幕和窄螢幕上都能自適應 */
+        .review-calendar { display: grid; gap: 10px; width: 100%; overflow-x: auto; }
+        .calendar-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-weight: bold; color: #4e73df; margin-bottom: 6px; min-width: 700px; }
+        .calendar-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; min-width: 700px; }
+        
         .calendar-day { min-height: 120px; background: #f9fbff; border: none; border-radius: 12px; padding: 10px; box-shadow: none; display: flex; flex-direction: column; justify-content: flex-start; }
         .calendar-day.empty { background: transparent; border: none; box-shadow: none; }
         .day-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
@@ -56,75 +89,133 @@ HTML_TEMPLATE = r"""
         .photo-limit-note { color: #6e707e; font-size: 0.75em; margin-top: 4px; }
         .calendar-note { color: #4e73df; font-size: 0.9em; margin-top: 6px; }
         
-        /* 📸 相片牆網格樣式 */
-        .trip-photos { margin-top: 15px; border-top: 1px dashed #e3e6f0; padding-top: 12px; }
-        .review-photos { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 12px; }
-        .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 8px; }
+        /* 📸 相片牆網格樣式：用 repeat(auto-fit) 讓卡片寬度在 180px 到滿版之間自動調配 */
+        .trip-photos { margin-top: 15px; border-top: 1px dashed #e3e6f0; padding-top: 12px; width: 100%; }
+        .review-photos { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 12px; width: 100%; }
+        .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 8px; width: 100%; }
         .photo-item { background: #f8f9fa; border: 1px solid #e3e6f0; padding: 8px; border-radius: 8px; display: flex; flex-direction: column; box-shadow: 0 2px 4px rgba(0,0,0,0.03); position: relative; }
         .photo-item img { width: 100%; height: 180px; object-fit: cover; display: block; border-radius: 6px; transition: transform 0.2s; }
         .photo-item img:hover { transform: scale(1.05); }
-        .photo-desc-text { font-size: 0.85em; color: #333; font-weight: bold; line-height: 1.3; margin-bottom: 8px; word-break: break-all; }
+        .photo-grid-desc-text { font-size: 0.85em; color: #333; font-weight: bold; line-height: 1.3; margin-bottom: 8px; word-break: break-all; }
         
         /* 相片內部的微型控制鈕 */
         .photo-actions { display: flex; gap: 4px; margin-top: auto; border-top: 1px solid #eaecf4; padding-top: 6px; justify-content: flex-end; }
-        .btn-photo-mini { font-size: 0.75em; padding: 3px 6px; border-radius: 4px; font-weight: normal; }
+        .btn-photo-mini { font-size: 0.75em; padding: 3px 6px; border-radius: 4px; font-weight: normal; width: auto; }
 
         /* 控制按鈕區塊樣式 */
-        .action-container { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; border-top: 1px solid #f1f3f9; padding-top: 10px; }
-        .btn-danger { background-color: #e74a3b; }
+        .action-container { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; border-top: 1px solid #f1f3f9; padding-top: 10px; width: 100%; }
+        .btn-danger { background-color: #e74a3b; width: auto; }
         .btn-danger:hover { background-color: #be2617; }
-        .btn-success { background-color: #1cc88a; }
+        .btn-success { background-color: #1cc88a; width: auto; }
         .btn-success:hover { background-color: #13855c; }
-        .btn-group { display: flex; gap: 5px; }
+        .btn-group { display: flex; gap: 5px; width: auto; }
 
         /* 一頁式彈窗樣式 (Modal UI) */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
         .modal-content { background-color: white; padding: 25px; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
         .modal-header { font-size: 1.3em; font-weight: bold; color: #4e73df; margin-bottom: 15px; border-bottom: 1px solid #e3e6f0; padding-bottom: 10px; }
         .modal-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px; }
+        .modal-buttons button { width: auto; }
         
         /* 橫向排列輸入框與清除鈕 */
-        .time-input-container { display: flex; gap: 8px; align-items: center; }
+        .time-input-container { display: flex; gap: 8px; align-items: center; width: 100%; }
+        .time-input-container input { flex: 1; }
+        .time-input-container button { width: auto; white-space: nowrap; }
+
+        /* ⭕ 新增左側欄樣式：佔 35% 寬度，負責行程編輯與查詢，內部可獨立滾動 */
+        .left-panel {
+            width: 35%;
+            height: 100%;
+            padding: 24px;
+            box-sizing: border-box;
+            background-color: #ffffff;
+            border-right: 2px solid #e3e6f0;
+            overflow-y: auto; 
+        }
+        
+        /* ⭕ 新增右側欄樣式：佔 65% 寬度，負責月度回顧區，預留給月曆與拍立得 */
+        .right-panel {
+            width: 65%;
+            height: 100%;
+            padding: 24px;
+            box-sizing: border-box;
+            background-color: #f8fafc; /* 微調為溫和的灰藍色背景，突顯回顧展質感 */
+            overflow-y: auto;
+        }
+
+        /* ⭕ 強制修改與刪除按鈕：改為上下排列、置中、且文字絕不換行 */
+        .trip-item button, 
+        .left-panel button {
+            display: flex;
+            flex-direction: column;   /* 關鍵：讓圖標在上，文字在下 */
+            align-items: center;      /* 水平置中 */
+            justify-content: center;  /* 垂直置中 */
+            padding: 6px 10px;        /* 給按鈕舒適的內邊距 */
+            font-size: 0.85em;        /* 微調字體大小，更精緻 */
+            white-space: nowrap;      /* 關鍵：強制文字絕對不換行！ */
+            word-break: keep-all;     /* 配合 nowrap，防止中文字元被切斷 */
+            min-width: 65px;          /* 設定一個足夠撐開四個字的最小寬度 */
+            height: auto;             /* 高度隨內容自動撐開 */
+        }
+
+        /* 如果你的按鈕裡面有包圖標（例如 📝 或 🗑️），讓圖標與文字保有一點點間距 */
+        .trip-item button i,
+        .trip-item button span {
+            margin-bottom: 2px;
+        }
+
+        /* ⭕ 確保按鈕列的 Flex 容器不會壓扁裡面的按鈕 */
+        .btn-group, 
+        .action-container { 
+            display: flex; 
+            gap: 8px;                 /* 按鈕之間的間距 */
+            align-items: stretch;     /* 讓綠色和紅色按鈕高度對齐一致 */
+            width: 100%; 
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📅 TIMETRO 行事曆助手</h1>
-        <div style="padding: 10px; margin-bottom: 12px; background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; border-radius: 6px;">
-            目前頁面由 <strong>web_service.py</strong> 提供，請使用 <code>http://127.0.0.1:5001</code> 開啟。
-        </div>
         
-        <h2>✨ 新增行程欄位</h2>
-        <form id="addTripForm">
-            <label style="font-weight: bold; font-size: 0.9em; color: #4e73df; margin-bottom: -5px;">📅 選擇日期</label>
-            <input type="date" id="date" required>
-            
-            <label style="font-weight: bold; font-size: 0.9em; color: #4e73df; margin-bottom: -5px;">⏰ 設置提醒時間 (選填)</label>
-            <div class="time-input-container">
-                <input type="time" id="time" style="flex: 1;">
-                <button type="button" onclick="document.getElementById('time').value=''" style="background-color: #858796; padding: 10px; font-size: 0.9em;">清除不提醒</button>
+        <div class="left-panel">
+            <h1>📅 TIMETRO 行事曆助手</h1>
+            <div style="padding: 10px; margin-bottom: 12px; background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; border-radius: 6px;">
+                目前頁面由 <strong>web_service.py</strong> 提供，請使用 <code>http://127.0.0.1:5001</code> 開啟。
             </div>
             
-            <label style="font-weight: bold; font-size: 0.9em; color: #4e73df; margin-bottom: -5px;">✨ 行程內容</label>
-            <input type="text" id="content" placeholder="請輸入行程內容" required>
-            
-            <label style="font-weight: bold; font-size: 0.9em; color: #4e73df; margin-bottom: -5px;">💡 備註事項</label>
-            <textarea id="note" placeholder="備註事項 (選填)"></textarea>
-            
-            <button type="submit" style="margin-top: 5px;">儲存行程</button>
-        </form>
+            <h2>✨ 新增行程欄位</h2>
+            <form id="addTripForm">
+                <label style="font-weight: bold; font-size: 0.9em; color: #4e73df; margin-bottom: -5px;">📅 選擇日期</label>
+                <input type="date" id="date" required>
+                
+                <label style="font-weight: bold; font-size: 0.9em; color: #4e73df; margin-bottom: -5px;">⏰ 設置提醒時間 (選填)</label>
+                <div class="time-input-container">
+                    <input type="time" id="time" style="flex: 1;">
+                    <button type="button" onclick="document.getElementById('time').value=''" style="background-color: #858796; padding: 10px; font-size: 0.9em;">清除不提醒</button>
+                </div>
+                
+                <label style="font-weight: bold; font-size: 0.9em; color: #4e73df; margin-bottom: -5px;">✨ 行程內容</label>
+                <input type="text" id="content" placeholder="請輸入行程內容" required>
+                
+                <label style="font-weight: bold; font-size: 0.9em; color: #4e73df; margin-bottom: -5px;">💡 備註事項</label>
+                <textarea id="note" placeholder="備註事項 (選填)"></textarea>
+                
+                <button type="submit" style="margin-top: 5px;">儲存行程</button>
+            </form>
 
-        <h2>🔍 行程搜尋與列表</h2>
-        <div class="search-box">
-            <input type="text" id="searchInput" placeholder="輸入關鍵字搜尋行程..." style="flex: 1;">
-            <button id="searchBtn">搜尋</button>
-            <button id="clearBtn" style="background-color: #858796;">清除</button>
+            <h2>🔍 行程搜尋與列表</h2>
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="輸入關鍵字搜尋行程..." style="flex: 1;">
+                <button id="searchBtn">搜尋</button>
+                <button id="clearBtn" style="background-color: #858796;">清除</button>
+            </div>
+
+            <ul id="tripList"></ul>
         </div>
-
-        <ul id="tripList"></ul>
-
-        <div class="review-section">
+        
+        <div class="right-panel">
             <h2>💖 當月行程與相片日記回顧</h2>
+            
             <div class="search-box">
                 <input type="month" id="reviewMonthInput" style="flex: 1;">
                 <button type="button" id="reviewBtn" style="background-color: #1cc88a;">生成月度回顧展</button>
@@ -136,6 +227,7 @@ HTML_TEMPLATE = r"""
             </div>
             <div id="reviewList"></div>
         </div>
+
     </div>
 
     <div id="editModal" class="modal">
@@ -423,6 +515,17 @@ HTML_TEMPLATE = r"""
 
             fetchTasks();
             startReminderClock();
+
+            // ⭕ 自動生成當月回顧展
+            console.log("🚀 系統初始化：自動調用當月月度回顧展");
+            const autoReviewMonth = reviewMonthInput.value;
+            if (autoReviewMonth) {
+                // 延遲 500ms 確保 fetchTasks 已完成
+                setTimeout(() => {
+                    console.log(`📅 自動觸發回顧展：${autoReviewMonth}`);
+                    reviewBtn.click();
+                }, 500);
+            }
         });
 
         function fetchTasks() {
