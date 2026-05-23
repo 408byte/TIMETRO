@@ -3,12 +3,17 @@ import os
 from flask import Flask, jsonify, request, render_template_string, send_file
 from flask_cors import CORS
 import logging
+import uuid  # 核心身分證機制
 
 app = Flask(__name__)
 CORS(app) 
 
+# 隱藏 Flask 預設的繁雜小黑窗連線日誌，只顯示嚴重錯誤
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
+
 # =====================================================
-# 🌐 網頁 HTML 前端：修正拍立得底部文字重疊與格式排版
+# 🌐 網頁 HTML 前端：純圖樣正方形控制鈕 + 修改按鈕綠色校正版
 # =====================================================
 HTML_TEMPLATE = r"""
 <!DOCTYPE html>
@@ -42,145 +47,179 @@ HTML_TEMPLATE = r"""
 
         h1, h2 { color: #4e73df; margin-top: 0; }
         
-        /* 表單與輸入框樣式 */
+        /* 表單與輸入框全域樣式 */
         form { display: grid; gap: 10px; margin-bottom: 25px; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e3e6f0; width: 100%; }
-        input, textarea, button { padding: 10px; border: 1px solid #d1d3e2; border-radius: 6px; font-size: 1em; width: 100%; }
+        input, textarea, button, select { padding: 12px; border: 1px solid #d1d3e2; border-radius: 6px; font-size: 1em; width: 100%; }
         
         button { background-color: #4e73df; color: white; border: none; cursor: pointer; font-weight: bold; }
         button:hover { background-color: #2e59d9; }
-        .search-box { display: flex; gap: 10px; margin-bottom: 20px; width: 100%; }
-        #tripList { padding: 0; width: 100%; }
         
-        /* 左側列表行程樣式 */
+        /* 📅 大面積日期與時間選擇器 (Padding 深度加厚) */
+        input[type="date"], input[type="time"] {
+            padding: 15px 14px !important; 
+            font-size: 1.05em !important;
+            cursor: pointer;
+            height: 52px !important; 
+        }
+        
+        /* 新增行程的時間容器 */
+        .add-time-container {
+            display: flex !important;
+            flex-direction: row !important; 
+            flex-wrap: wrap !important; 
+            gap: 8px !important;
+            align-items: center !important;
+            width: 100% !important;
+        }
+        .add-time-container input[type="time"] {
+            flex: 2 1 180px !important;
+            margin: 0 !important;
+            width: 100% !important;
+        }
+        .add-time-container button {
+            flex: 1 1 120px !important; 
+            margin: 0 !important;
+            height: 52px !important; 
+            white-space: nowrap !important;
+            width: 100% !important;
+            padding: 0 16px !important;
+            background-color: #858796 !important; 
+            font-size: 0.92em !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        .add-time-container button:hover { background-color: #6a6b75 !important; }
+
+        /* 行程搜尋區塊 */
+        .search-box { display: flex; gap: 8px; margin-bottom: 20px; width: 100%; align-items: center; }
+        .search-box input { flex: 1; }
+        .search-box button { width: auto; padding: 10px 16px; white-space: nowrap; flex-shrink: 0; }
+        
+        #tripList { padding: 0; width: 100%; margin: 0; }
+        
+        /* 左側列表行程卡片樣式 */
         .trip-item { background: #fff; border: 1px solid #e3e6f0; padding: 15px; margin-bottom: 12px; border-radius: 8px; list-style: none; box-shadow: 0 2px 4px rgba(0,0,0,0.02); width: 100%; }
         .trip-item-header { display: flex; justify-content: space-between; align-items: center; color: #4e73df; font-weight: bold; }
-        .trip-item-content { font-weight: bold; font-size: 1.1em; margin-top: 8px; color: #2e2f37; }
-        .trip-item-note { color: #6e707e; font-size: 0.9em; margin-top: 4px; }
+        .trip-item-content { font-weight: bold; font-size: 1.1em; margin-top: 8px; color: #2e2f37; word-break: break-all; }
+        .trip-item-note { color: #6e707e; font-size: 0.9em; margin-top: 4px; word-break: break-all; }
         
-        /* 左側相片牆小網格樣式 */
+        /* 相片區域樣式 */
         .trip-photos { margin-top: 15px; border-top: 1px dashed #e3e6f0; padding-top: 12px; width: 100%; }
-        .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-top: 8px; width: 100%; }
+        .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 8px; width: 100%; }
         .photo-item { background: #f8f9fa; border: 1px solid #e3e6f0; padding: 8px; border-radius: 8px; display: flex; flex-direction: column; position: relative; }
-        .photo-item img { width: 100%; height: 100px; object-fit: cover; display: block; border-radius: 6px; }
+        .photo-item img { width: 100%; height: 110px; object-fit: cover; display: block; border-radius: 6px; }
         .photo-grid-desc-text { font-size: 0.82em; color: #555; font-weight: bold; margin-bottom: 6px; word-break: break-all; }
-        .photo-actions { display: flex; gap: 4px; margin-top: auto; border-top: 1px solid #eaecf4; padding-top: 6px; justify-content: flex-end; }
-        .btn-photo-mini { font-size: 0.75em; padding: 3px 6px; border-radius: 4px; width: auto; }
-
-        /* 行程控制鈕底座 */
-        .action-container { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; border-top: 1px solid #f1f3f9; padding-top: 10px; width: 100%; gap: 12px; }
-        .btn-danger { background-color: #e74a3b; width: auto; }
-        .btn-danger:hover { background-color: #be2617; }
-        .btn-success { background-color: #1cc88a; width: auto; }
-        .btn-success:hover { background-color: #13855c; }
-        .btn-group { display: flex; gap: 8px; align-items: center; width: auto; flex-shrink: 0; }
-
-        /* 📊 行程概覽 */
-        .calendar-section {
-            background: #ffffff;
-            border: 1px solid #e3e6f0;
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 25px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.01);
-            width: 100%;
+        
+        /* 相片小正方形按鈕列 */
+        .photo-actions { display: flex; gap: 4px; margin-top: 8px; border-top: 1px solid #eaecf4; padding-top: 6px; justify-content: flex-end; width: 100%; }
+        
+        /* 主控制鈕底座改為「靠右對齊（flex-end）」，左側空出來留白，縮小螢幕自動折行 */
+        .action-container { 
+            display: flex; 
+            flex-direction: row; 
+            flex-wrap: wrap !important; 
+            gap: 8px; 
+            margin-top: 12px; 
+            border-top: 1px solid #f1f3f9; 
+            padding-top: 10px; 
+            width: 100%; 
+            align-items: center; 
+            justify-content: flex-end; 
         }
-        .calendar-grid {
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            gap: 6px;
-            margin-top: 10px;
-        }
-        .calendar-weekday {
-            text-align: center;
+
+        /* 📸 新增相片主按鈕：經典質感藍色，寬度不強行填滿 */
+        .btn-add-photo-full { 
+            flex: 0 1 auto !important; 
+            width: auto !important;
+            background-color: #4e73df !important; 
+            overflow: hidden; 
+            text-overflow: ellipsis; 
+            white-space: nowrap;
+            height: 38px !important;
+            padding: 0 16px !important;
+            font-size: 0.85em !important;
             font-weight: bold;
-            font-size: 0.85em;
-            color: #4e73df;
-            padding: 5px 0;
-            border-bottom: 2px solid #eaecf4;
-        }
-        .calendar-day {
-            min-height: 75px;
-            background: #f8f9fa;
-            border: 1px solid #e3e6f0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             border-radius: 6px;
-            padding: 4px;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
         }
+        .btn-add-photo-full:hover { background-color: #2e59d9 !important; }
+        
+        /* 右側按鈕群組容器 */
+        .btn-twin-group { 
+            display: flex; 
+            gap: 6px; 
+            align-items: center; 
+            flex: 0 0 auto !important; 
+            width: auto !important;
+        }
+        
+        /* 行程主卡片的修改、刪除按鈕：固定為 38px * 38px 絕對正方形、純圖樣 */
+        .btn-twin-group button { 
+            width: 38px !important; 
+            height: 38px !important; 
+            padding: 0 !important;
+            font-size: 1.1em !important; 
+            font-weight: bold !important;
+            border-radius: 6px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            flex: none !important; 
+        }
+        
+        /* 相片牆底下的控制小按鈕：固定為 22px * 22px 純精緻正方形 */
+        .btn-photo-mini {
+            width: 22px !important; 
+            height: 22px !important;
+            padding: 0 !important;
+            font-size: 0.82em !important;
+            font-weight: bold !important;
+            border-radius: 4px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            flex: none !important;
+        }
+        
+        /* 🌟 核心修正：將所有修改（success）按鈕完全校正為精美舒服的綠色（#1cc88a） */
+        .btn-success { background-color: #1cc88a !important; color: white !important; }
+        .btn-success:hover { background-color: #13855c !important; }
+        
+        /* 刪除按鈕維持高對比紅色 */
+        .btn-danger { background-color: #e74a3b !important; color: white !important; }
+        .btn-danger:hover { background-color: #be2617 !important; }
+
+        /* 左右面板寬度控制 */
+        .left-panel { width: 38%; height: 100%; padding: 20px; box-sizing: border-box; background-color: #ffffff; border-right: 2px solid #e3e6f0; overflow-y: auto; }
+        .right-panel { width: 62%; height: 100%; padding: 20px; box-sizing: border-box; background-color: #f8fafc; overflow-y: auto; }
+
+        /* 日曆概覽佈局 */
+        .calendar-section { background: #ffffff; border: 1px solid #e3e6f0; border-radius: 12px; padding: 16px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.01); width: 100%; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 10px; }
+        .calendar-weekday { text-align: center; font-weight: bold; font-size: 0.85em; color: #4e73df; padding: 5px 0; border-bottom: 2px solid #eaecf4; }
+        .calendar-day { min-height: 75px; background: #f8f9fa; border: 1px solid #e3e6f0; border-radius: 6px; padding: 4px; display: flex; flex-direction: column; justify-content: flex-start; }
         .calendar-day.other-month { opacity: 0.35; background: #e9ecef; }
         .calendar-day.today { background: #fff3cd; border-color: #f6c23e; }
         .calendar-day-num { font-size: 0.82em; font-weight: bold; color: #6e707e; margin-bottom: 3px; }
-        .calendar-day.today .calendar-day-num { color: #b7791f; }
-        .calendar-day-events {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            overflow-y: auto;
-            max-height: 52px;
-        }
-        .calendar-event-dot {
-            font-size: 0.72em;
-            background: #4e73df;
-            color: white;
-            padding: 1px 4px;
-            border-radius: 3px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
+        .calendar-day-events { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; max-height: 52px; }
+        .calendar-event-dot { font-size: 0.72em; background: #4e73df; color: white; padding: 1px 4px; border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .calendar-event-dot.has-photo { background: #1cc88a; }
 
-        /* =====================================================
-           📸 回顧展相片牆主區塊
-           ===================================================== */
-        #reviewList { 
-            width: 100%; 
-            margin-top: 10px; 
-            display: none; 
-        }
+        /* 回顧展相片牆自由畫布 */
+        #reviewList { width: 100%; margin-top: 10px; display: none; }
+        .gallery-free-canvas { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 24px; width: 100%; padding: 30px 15px; align-items: start; }
 
-        .gallery-free-canvas { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); 
-            gap: 24px; 
-            width: 100%; 
-            padding: 30px 15px;
-            align-items: start; 
-        }
-
-        /* 🎀 卡片共同底座 */
         .diary-card-combo {
-            background: #fffdf9;
-            border-radius: 12px;
-            padding: 12px;
-            border: 2px solid #f3ebd3;
+            background: #fffdf9; border-radius: 12px; padding: 12px; border: 2px solid #f3ebd3;
             box-shadow: 0 8px 20px rgba(218, 165, 32, 0.12), 0 2px 5px rgba(0,0,0,0.03);
-            position: relative;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            display: flex;
+            position: relative; transition: transform 0.2s ease, box-shadow 0.2s ease; display: flex;
         }
-
-        /* 🟢 有註解的卡片：一律橫向延伸跨 2 欄 */
-        .diary-card-combo.size-large {
-            grid-column: span 2; 
-            flex-direction: row; 
-            gap: 16px;
-            padding-top: 28px; 
-            align-items: start; 
-        }
-
-        /* 🔵 無註解的最小化卡片：維持 1 欄不跨欄 */
-        .diary-card-combo.size-small { 
-            grid-column: span 1; 
-            flex-direction: column; 
-        }
-
-        .diary-card-combo:hover { 
-            transform: scale(1.03) !important; 
-            z-index: 20; 
-            box-shadow: 0 12px 25px rgba(218, 165, 32, 0.22); 
-        }
+        .diary-card-combo.size-large { grid-column: span 2; flex-direction: row; gap: 16px; padding-top: 28px; align-items: start; }
+        .diary-card-combo.size-small { grid-column: span 1; flex-direction: column; }
+        .diary-card-combo:hover { transform: scale(1.03) !important; z-index: 20; box-shadow: 0 12px 25px rgba(218, 165, 32, 0.22); }
 
         /* ✨ 拍立得相框樣式 */
         .polaroid-card {
@@ -269,92 +308,31 @@ HTML_TEMPLATE = r"""
             overflow: hidden;
             text-overflow: ellipsis;
         }
+        .size-large .polaroid-card { width: 45%; padding: 10px 10px 32px 10px; }
+        .size-small .polaroid-card { width: 100%; padding: 6px 6px 54px 6px; }
 
-        /* 第二行：日期時間 */
-        .small-footer-time {
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 0.72em;
-            font-weight: bold;
-            color: #7e808c;
-            width: 100%;
-        }
+        .polaroid-card img { width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: cover; background-color: #fcfcfc; border: 1px solid rgba(0, 0, 0, 0.04); display: block; }
+        .polaroid-footer-time { position: absolute; bottom: 6px; left: 0; width: 100%; text-align: center; font-family: 'Courier New', Courier, monospace; font-weight: bold; font-size: 0.75em; color: #8c8e99; }
+        .large-title-footer { margin-top: 8px; font-size: 0.85em; font-weight: bold; color: #2e59d9; text-align: center; width: 100%; border-bottom: 1px dashed #ced4da; padding-bottom: 3px; }
 
-        /* 📌 大圖專屬飾條 */
-        .large-tape-header {
-            position: absolute;
-            top: -10px;
-            left: 15px;
-            background: rgba(246, 194, 62, 0.95); 
-            color: #5d4037;
-            padding: 3px 14px;
-            font-size: 0.78em;
-            font-weight: bold;
-            box-shadow: 1px 1px 4px rgba(0,0,0,0.08);
-            transform: rotate(-1deg);
-            z-index: 5;
-            border-left: 2px dashed #dfa613;
-            border-right: 2px dashed #dfa613;
-        }
+        .polaroid-footer-block-small { position: absolute; bottom: 6px; left: 0; width: 100%; padding: 0 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; text-align: center; }
+        .small-footer-content { font-size: 0.82em; font-weight: bold; color: #2e59d9; width: 100%; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .small-footer-time { font-family: 'Courier New', Courier, monospace; font-size: 0.72em; font-weight: bold; color: #7e808c; width: 100%; }
 
-        /* 📝 手帳日記內文框：高度自動貼合文字量 */
-        .notebook-caption-box {
-            flex: 1; 
-            background-color: #fffef9; 
-            border: 1px solid #ebdcb9;
-            border-radius: 8px;
-            position: relative;
-            padding: 12px 12px 12px 26px; 
-            display: flex;
-            flex-direction: column;
-            background-image: linear-gradient(#f4ebd3 1px, transparent 1px);
-            background-size: 100% 22px;
-            line-height: 22px;
-            height: auto; 
-            min-height: 60px; 
-        }
-        .notebook-caption-box::before {
-            content: "";
-            position: absolute;
-            left: 15px;
-            top: 0;
-            width: 1px;
-            height: 100%;
-            background-color: #ff8b8b; 
-            opacity: 0.4;
-        }
-        .notebook-desc-text {
-            font-size: 0.88em;
-            color: #3a3b45;
-            font-weight: 500;
-            word-break: break-all;
-            white-space: pre-wrap;
-        }
+        .large-tape-header { position: absolute; top: -10px; left: 15px; background: rgba(246, 194, 62, 0.95); color: #5d4037; padding: 3px 14px; font-size: 0.78em; font-weight: bold; box-shadow: 1px 1px 4px rgba(0,0,0,0.08); transform: rotate(-1deg); z-index: 5; border-left: 2px dashed #dfa613; border-right: 2px dashed #dfa613; }
 
-        /* 基礎彈窗與其他版面元件 */
+        .notebook-caption-box { flex: 1; background-color: #fffef9; border: 1px solid #ebdcb9; border-radius: 8px; position: relative; padding: 12px 12px 12px 26px; display: flex; flex-direction: column; background-image: linear-gradient(#f4ebd3 1px, transparent 1px); background-size: 100% 22px; line-height: 22px; height: auto; min-height: 60px; }
+        .notebook-caption-box::before { content: ""; position: absolute; left: 15px; top: 0; width: 1.5px; height: 100%; background-color: #ff8b8b; opacity: 0.4; }
+        .notebook-desc-text { font-size: 0.88em; color: #333; font-weight: 500; word-break: break-all; white-space: pre-wrap; }
+
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
         .modal-content { background-color: white; padding: 25px; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
         .modal-header { font-size: 1.3em; font-weight: bold; color: #4e73df; margin-bottom: 15px; border-bottom: 1px solid #e3e6f0; padding-bottom: 10px; }
         .modal-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px; }
-        .modal-buttons button { width: auto; }
+        .modal-buttons button { width: auto; height: auto; padding: 10px 16px !important; flex: none !important; }
         
         .time-input-container { display: flex; gap: 8px; align-items: center; width: 100%; }
-        .time-input-container input { flex: 1; }
-        .time-input-container button { width: auto; white-space: nowrap; }
-
-        .left-panel { width: 35%; height: 100%; padding: 24px; box-sizing: border-box; background-color: #ffffff; border-right: 2px solid #e3e6f0; overflow-y: auto; }
-        .right-panel { width: 65%; height: 100%; padding: 24px; box-sizing: border-box; background-color: #f8fafc; overflow-y: auto; }
-
-        .trip-item button, .left-panel button { 
-            display: inline-flex; 
-            align-items: center; 
-            justify-content: center; 
-            padding: 8px 16px; 
-            font-size: 0.9em; 
-            white-space: nowrap; 
-            word-break: keep-all; 
-            width: auto; 
-            height: auto; 
-        }
+        .btn-clear-time-large { width: auto !important; white-space: nowrap; height: 52px !important; padding: 0 16px !important; font-size: 0.92em !important; background-color: #e74a3b; display: inline-flex; align-items: center; justify-content: center; flex: none !important; }
     </style>
 </head>
 <body>
@@ -371,9 +349,9 @@ HTML_TEMPLATE = r"""
                 <input type="date" id="date" required>
                 
                 <label style="font-weight: bold; font-size: 0.9em; color: #4e73df; margin-bottom: -5px;">⏰ 設置提醒時間 (選填)</label>
-                <div class="time-input-container">
-                    <input type="time" id="time" style="flex: 1;">
-                    <button type="button" onclick="document.getElementById('time').value=''" style="background-color: #858796; padding: 10px; font-size: 0.9em;">清除不提醒</button>
+                <div class="add-time-container">
+                    <input type="time" id="time">
+                    <button type="button" onclick="document.getElementById('time').value=''">不設置提醒</button>
                 </div>
                 
                 <label style="font-weight: bold; font-size: 0.9em; color: #4e73df; margin-bottom: -5px;">✨ 行程內容</label>
@@ -387,7 +365,7 @@ HTML_TEMPLATE = r"""
 
             <h2>🔍 行程搜尋與列表</h2>
             <div class="search-box">
-                <input type="text" id="searchInput" placeholder="輸入關鍵字搜尋行程..." style="flex: 1;">
+                <input type="text" id="searchInput" placeholder="請輸入行程關鍵字..." style="flex: 1;">
                 <button id="searchBtn">搜尋</button>
                 <button id="clearBtn" style="background-color: #858796;">清除</button>
             </div>
@@ -420,17 +398,15 @@ HTML_TEMPLATE = r"""
         <div class="modal-content">
             <div class="modal-header">📝 一次修改所有行程欄位</div>
             <form id="editTripForm" style="margin-bottom: 0; background: none; border: none; padding: 0;">
-                <input type="hidden" id="editOldDate">
-                <input type="hidden" id="editOldTime">
-                <input type="hidden" id="editOldContent">
+                <input type="hidden" id="editTaskId">
 
-                <label style="font-weight: bold; font-size: 0.9em; color: #5a5c69;">📅 日期 (必須為 YYYY-MM-DD)</label>
-                <input type="text" id="editDate" placeholder="YYYY-MM-DD" required>
+                <label style="font-weight: bold; font-size: 0.9em; color: #5a5c69;">📅 修改日期</label>
+                <input type="date" id="editDate" required>
                 
-                <label style="font-weight: bold; font-size: 0.9em; color: #5a5c69;">⏰ 設置提醒時間</label>
+                <label style="font-weight: bold; font-size: 0.9em; color: #5a5c69;">⏰ 修改提醒時間 (選填)</label>
                 <div class="time-input-container" style="margin-bottom: 10px;">
                     <input type="time" id="editTime" style="flex: 1;">
-                    <button type="button" onclick="document.getElementById('editTime').value=''" style="background-color: #e74a3b; padding: 9px; font-size: 0.85em;">❌ 取消設置</button>
+                    <button type="button" class="btn-clear-time-large" onclick="document.getElementById('editTime').value=''">❌ 不提醒</button>
                 </div>
                 
                 <label style="font-weight: bold; font-size: 0.9em; color: #5a5c69;">✨ 行程內容</label>
@@ -451,7 +427,7 @@ HTML_TEMPLATE = r"""
         <div class="modal-content">
             <div class="modal-header">🖼️ 更改相片與文字解說</div>
             <form id="photoEditForm" style="margin-bottom: 0; background: none; border: none; padding: 0;">
-                <input type="hidden" id="photoTripString">
+                <input type="hidden" id="photoTripId">
                 <input type="hidden" id="photoIndex">
 
                 <label style="font-weight: bold; font-size: 0.9em; color: #5a5c69;">📂 照片檔案路徑 / 圖片網址</label>
@@ -483,6 +459,29 @@ HTML_TEMPLATE = r"""
         let allTasks = [];
         let currentReviewMonth = '';
         const today = new Date();
+
+        if (addTripForm) {
+            addTripForm.addEventListener('submit', function (event) {
+                event.preventDefault();
+                const taskData = {
+                    date: document.getElementById('date').value,
+                    time: document.getElementById('time').value ? document.getElementById('time').value.trim() : "",
+                    content: document.getElementById('content').value,
+                    note: document.getElementById('note').value
+                };
+                fetch(`${BASE_URL}/tasks`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(taskData)
+                })
+                .then(res => res.json())
+                .then(() => {
+                    alert("🎉 行程新增成功！");
+                    addTripForm.reset();
+                    fetchTasks();
+                });
+            });
+        }
 
         function getRandomRotation() {
             const angles = [-1.5, -0.8, -0.4, 0.4, 0.8, 1.5];
@@ -523,7 +522,7 @@ HTML_TEMPLATE = r"""
                             
                             const photoTrips = data.filter(trip => trip.photos && trip.photos.length > 0);
                             if (photoTrips.length === 0) {
-                                reviewList.innerHTML = `<div style="text-align:center; padding:30px; color:#858796;">📸 該月行程中尚未新增任何相片解說日記喔！</div>`;
+                                reviewList.innerHTML = `<div style="text-align:center; padding:30px; color:#858796;">📸 該月行程中尚未新增 any 相片解說日記喔！</div>`;
                                 reviewList.style.display = 'block'; 
                                 downloadReviewBtn.disabled = true;
                                 currentReviewMonth = '';
@@ -550,11 +549,7 @@ HTML_TEMPLATE = r"""
                                 });
                             });
 
-                            allPhotosInMonth.sort((a, b) => {
-                                const timeA = a.trip.time || "23:59";
-                                const timeB = b.trip.time || "23:59";
-                                return new Date(`${a.trip.date} ${timeA}`) - new Date(`${b.trip.date} ${timeB}`);
-                            });
+                            allPhotosInMonth.sort((a, b) => new Date(`${a.trip.date} ${a.trip.time || "23:59"}`) - new Date(`${b.trip.date} ${b.trip.time || "23:59"}`));
 
                             const galleryHTML = [];
                             galleryHTML.push('<div id="captureContainer" style="padding:25px; background:#fcfaf2; border-radius:18px;">');
@@ -571,7 +566,6 @@ HTML_TEMPLATE = r"""
                                 galleryHTML.push(`<div class="diary-card-combo ${sizeClass}" style="transform: rotate(${rot}deg);">`);
 
                                 if (sizeClass === "size-large") {
-                                    // 🟢 大圖兼文字方框模式
                                     galleryHTML.push(`<div class="large-tape-header">📌 ${footerTimeText}</div>`);
                                     galleryHTML.push('<div class="polaroid-card">');
                                     galleryHTML.push(`<img src="${src}" onerror="this.src='https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=320'; this.style.opacity='0.4';">`);
@@ -583,7 +577,6 @@ HTML_TEMPLATE = r"""
                                     galleryHTML.push(`<div class="notebook-desc-text">${item.desc}</div>`);
                                     galleryHTML.push('</div>');
                                 } else {
-                                    // 🛠️ 修正點：中小照片（無註解模式）改為兩行獨立區塊，絕不重疊
                                     galleryHTML.push('<div class="polaroid-card">');
                                     galleryHTML.push(`<img src="${src}" onerror="this.src='https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200'; this.style.opacity='0.4';">`);
                                     galleryHTML.push('<div class="polaroid-footer-block-small">');
@@ -617,7 +610,6 @@ HTML_TEMPLATE = r"""
             startReminderClock();
         });
 
-        // 其餘 JavaScript 函數保持不變...
         function updateCalendarViewOnly(yearMonthStr) {
             fetch(`${BASE_URL}/monthly-review?month=${yearMonthStr}`)
                 .then(res => res.json())
@@ -710,74 +702,54 @@ HTML_TEMPLATE = r"""
                 });
         }
 
-        addTripForm.addEventListener('submit', function (event) {
-            event.preventDefault();
-            const taskData = {
-                date: document.getElementById('date').value,
-                time: document.getElementById('time').value.trim(),
-                content: document.getElementById('content').value,
-                note: document.getElementById('note').value
-            };
-            fetch(`${BASE_URL}/tasks`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(taskData)
-            })
-            .then(res => res.json())
-            .then(() => {
-                alert("🎉 行程新增成功！");
-                addTripForm.reset();
-                fetchTasks();
-            });
-        });
-
-        function addPhotoToTaskDirectly(taskString) {
-            const targetTrip = JSON.parse(decodeURIComponent(taskString));
-            const photoPath = prompt(`📸 請輸入相片路徑：\n(例如：C:\\images\\pic.jpg)`);
-            if (!photoPath) return;
-            const photoDesc = prompt("💬 請輸入解說（有字即會生成自適應橫向方框，留空則為純拍立得）：", "");
+        function addPhotoToTaskDirectly(taskId, taskContent, currentPhotoCount) {
+            if (currentPhotoCount >= 10) {
+                alert(`❌ 無法新增！【${taskContent}】相片已達 10 筆上限！`);
+                return;
+            }
+            const photoPath = prompt(`📸 請輸入為【${taskContent}】新增的照片路徑：\n(example：C:\\images\\pic.jpg 或 網址)`);
+            if (!photoPath || photoPath.trim() === "") return;
+            const photoDesc = prompt("💬 請輸入文字解說（若留空或填無解說，回顧展將不顯示日記方框）：", "");
+            
             fetch(`${BASE_URL}/web-photo`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    date: targetTrip.date, time: targetTrip.time, content: targetTrip.content,
-                    path: photoPath.trim(), desc: photoDesc ? photoDesc.trim() : ""
-                })
+                body: JSON.stringify({ id: taskId, path: photoPath.trim(), desc: photoDesc ? photoDesc.trim() : "" })
             })
-            .then(res => res.json())
+            .then(res => { if (!res.ok) throw new Error("新增照片失敗"); return res.json(); })
             .then(data => {
                 if (data.status === "success") {
-                    alert("📸 紀錄成功！"); fetchTasks();
+                    alert("📸 照片與解說已成功紀錄！"); fetchTasks();
                     if (document.getElementById('reviewList').style.display === 'block') { document.getElementById('reviewBtn').click(); }
-                }
-            });
+                } else { alert("❌ 錯誤：" + data.message); }
+            })
+            .catch(err => alert("❌ 連線錯誤：" + err.message));
         }
 
-        function deleteTrip(taskString) {
-            const targetTrip = JSON.parse(decodeURIComponent(taskString));
-            if (confirm(`⚠️ 確定要刪除行程嗎？`)) {
+        function deleteTrip(taskId, taskContent) {
+            if (confirm(`⚠️ 確定要刪除行程【${taskContent}】嗎？`)) {
                 fetch(`${BASE_URL}/web-delete`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ date: targetTrip.date, time: targetTrip.time, content: targetTrip.content })
+                    body: JSON.stringify({ id: taskId })
                 })
                 .then(res => res.json())
                 .then(data => {
-                    fetchTasks();
-                    if (document.getElementById('reviewList').style.display === 'block') { document.getElementById('reviewBtn').click(); }
+                    if (data.status === "success") {
+                        alert("🗑️ 行程已成功刪除！"); fetchTasks();
+                        if (document.getElementById('reviewList').style.display === 'block') { document.getElementById('reviewBtn').click(); }
+                    } else { alert("❌ 刪除失敗：" + data.message); }
                 });
             }
         }
 
-        function editTrip(taskString) {
-            const targetTrip = JSON.parse(decodeURIComponent(taskString));
-            document.getElementById('editOldDate').value = targetTrip.date;
-            document.getElementById('editOldTime').value = targetTrip.time;
-            document.getElementById('editOldContent').value = targetTrip.content;
-            document.getElementById('editDate').value = targetTrip.date;
-            document.getElementById('editTime').value = targetTrip.time || "";
-            document.getElementById('editContent').value = targetTrip.content;
-            document.getElementById('editNote').value = targetTrip.note || "";
+        function editTrip(taskId, date, time, content, note) {
+            document.getElementById('editTaskId').value = taskId;
+            document.getElementById('editDate').value = date; 
+            document.getElementById('editContent').value = content;
+            document.getElementById('editNote').value = note || "";
+            document.getElementById('editTime').value = time || ""; 
+            
             editModal.style.display = 'flex';
         }
 
@@ -789,21 +761,24 @@ HTML_TEMPLATE = r"""
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    old_date: document.getElementById('editOldDate').value,
-                    old_time: document.getElementById('editOldTime').value,
-                    old_content: document.getElementById('editOldContent').value,
+                    id: document.getElementById('editTaskId').value,
                     new_date: document.getElementById('editDate').value.trim(),
-                    new_time: document.getElementById('editTime').value.trim(),
+                    new_time: document.getElementById('editTime').value.trim(), 
                     new_content: document.getElementById('editContent').value.trim(),
                     new_note: document.getElementById('editNote').value.trim()
                 })
             })
             .then(res => res.json())
-            .then(() => { closeEditModal(); fetchTasks(); if (document.getElementById('reviewList').style.display === 'block') { document.getElementById('reviewBtn').click(); } });
+            .then(data => {
+                if (data.status === "success") {
+                    alert("📝 行程內容已成功更新！"); closeEditModal(); fetchTasks();
+                    if (document.getElementById('reviewList').style.display === 'block') { document.getElementById('reviewBtn').click(); }
+                }
+            });
         });
 
-        function openPhotoEditModalDirectly(taskStr, index, path, desc) {
-            document.getElementById('photoTripString').value = taskStr;
+        function openPhotoEditModalDirectly(taskId, index, path, desc) {
+            document.getElementById('photoTripId').value = taskId;
             document.getElementById('photoIndex').value = index;
             document.getElementById('photoEditPath').value = path;
             document.getElementById('photoEditDesc').value = desc === "無解說" ? "" : desc;
@@ -818,31 +793,35 @@ HTML_TEMPLATE = r"""
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    date: JSON.parse(decodeURIComponent(document.getElementById('photoTripString').value)).date,
-                    time: JSON.parse(decodeURIComponent(document.getElementById('photoTripString').value)).time,
-                    content: JSON.parse(decodeURIComponent(document.getElementById('photoTripString').value)).content,
+                    id: document.getElementById('photoTripId').value,
                     photo_index: parseInt(document.getElementById('photoIndex').value),
                     new_path: document.getElementById('photoEditPath').value.trim(),
                     new_desc: document.getElementById('photoEditDesc').value.trim()
                 })
             })
             .then(res => res.json())
-            .then(() => { closePhotoEditModal(); fetchTasks(); if (document.getElementById('reviewList').style.display === 'block') { document.getElementById('reviewBtn').click(); } });
+            .then(data => {
+                if(data.status === "success") {
+                    alert("🖼️ 相片與解說已成功更新！"); closePhotoEditModal(); fetchTasks();
+                    if (document.getElementById('reviewList').style.display === 'block') { document.getElementById('reviewBtn').click(); }
+                }
+            });
         });
 
-        function fireDeleteSinglePhoto(taskStr, index) {
-            const targetTrip = JSON.parse(decodeURIComponent(taskStr));
-            if(confirm("⚠️ 確定要移除這張相片嗎？")) {
+        function fireDeleteSinglePhoto(taskId, index) {
+            if(confirm("⚠️ 確定要移除這張相片與其文字解說嗎？")) {
                 fetch(`${BASE_URL}/web-photo-delete`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        date: targetTrip.date, time: targetTrip.time, content: targetTrip.content,
-                        photo_index: parseInt(index)
-                    })
+                    body: JSON.stringify({ id: taskId, photo_index: parseInt(index) })
                 })
-                .then(safeRes => safeRes.json())
-                .then(() => { fetchTasks(); if (document.getElementById('reviewList').style.display === 'block') { document.getElementById('reviewBtn').click(); } });
+                .then(res => res.json())
+                .then(data => {
+                    if(data.status === "success") {
+                        alert("🗑️ 相片已成功移除！"); fetchTasks();
+                        if (document.getElementById('reviewList').style.display === 'block') { document.getElementById('reviewBtn').click(); }
+                    }
+                });
             }
         }
 
@@ -856,26 +835,58 @@ HTML_TEMPLATE = r"""
             result.forEach((trip) => {
                 const li = document.createElement('li');
                 li.className = 'trip-item';
-                const serializedTrip = encodeURIComponent(JSON.stringify(trip));
+                let timeStr = trip.time ? `⏰ ${trip.time}` : '🔔 不設定提醒';
+                let noteStr = trip.note ? `<div class="trip-item-note">💡 ${trip.note}</div>` : '';
+                const currentPhotoCount = trip.photos ? trip.photos.length : 0;
+                
                 let photosHTML = "";
                 if (trip.photos && trip.photos.length > 0) {
-                    photosHTML += `<div class="trip-photos"><div class="photo-grid">`;
+                    photosHTML += `<div class="trip-photos"><div class="photo-grid"></div></div>`;
+                }
+
+                li.innerHTML = `
+                    <div class="trip-item-header"><span>📅 ${trip.date} &nbsp;&nbsp; ${timeStr}</span></div>
+                    <div class="trip-item-content">${trip.content}</div>
+                    ${noteStr}
+                    ${photosHTML}
+                    <div class="action-container">
+                        <button class="btn-add-photo-full">📸 新增相片 (${currentPhotoCount}/10)</button>
+                        <div class="btn-twin-group">
+                            <button class="btn-success btn-edit">✏️</button>
+                            <button class="btn-danger btn-delete">🗑️</button>
+                        </div>
+                    </div>
+                `;
+
+                if (trip.photos && trip.photos.length > 0) {
+                    const gridContainer = li.querySelector('.photo-grid');
                     trip.photos.forEach((p, pIdx) => {
                         const pPath = (typeof p === 'object' && p !== null) ? p.path : p;
                         let pDesc = (trip.photo_notes && trip.photo_notes[pIdx]) ? trip.photo_notes[pIdx] : "無解說";
-                        photosHTML += `
-                            <div class="photo-item">
-                                <div class="photo-grid-desc-text">💬 <span>${pDesc}</span></div>
+
+                        const photoItem = document.createElement('div');
+                        photoItem.className = 'photo-item';
+                        photoItem.innerHTML = `
+                            <div class="photo-wrapper" style="position: relative; width: 100%;">
                                 <img src="${getPhotoUrl(pPath)}" onerror="this.src='https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200'; this.style.opacity='0.5';">
-                                <div class="photo-actions">
-                                    <button class="btn-success btn-photo-mini" onclick="openPhotoEditModalDirectly('${serializedTrip}', ${pIdx}, '${pPath.replace(/\\/g, "\\\\")}', '${pDesc.replace(/'/g, "\\'")}')">✏️</button>
-                                    <button class="btn-danger btn-photo-mini" onclick="fireDeleteSinglePhoto('${serializedTrip}', ${pIdx})">🗑️</button>
-                                </div>
-                            </div>`;
+                            </div>
+                            <div class="photo-grid-desc-text">💬 <span class="desc-text-span"></span></div>
+                            <div class="photo-actions">
+                                <button type="button" class="btn-success btn-photo-mini inner-edit-btn">✏️</button>
+                                <button type="button" class="btn-danger btn-photo-mini inner-del-btn">🗑️</button>
+                            </div>
+                        `;
+                        photoItem.querySelector('.desc-text-span').textContent = pDesc;
+                        
+                        photoItem.querySelector('.inner-edit-btn').onclick = () => openPhotoEditModalDirectly(trip.id, pIdx, pPath, pDesc);
+                        photoItem.querySelector('.inner-del-btn').onclick = () => fireDeleteSinglePhoto(trip.id, pIdx);
+                        gridContainer.appendChild(photoItem);
                     });
-                    photosHTML += `</div></div>`;
                 }
-                li.innerHTML = `<div class="trip-item-header"><span>📅 ${trip.date} ${trip.time ? '⏰ '+trip.time : ''}</span></div><div class="trip-item-content">${trip.content}</div>${photosHTML}<div class="action-container"><button class="btn-success" onclick="addPhotoToTaskDirectly('${serializedTrip}')">📸 新增相片</button><div class="btn-group"><button class="btn-success" onclick="editTrip('${serializedTrip}')">📝 修改</button><button class="btn-danger" onclick="deleteTrip('${serializedTrip}')">🗑️ 刪除</button></div></div>`;
+
+                li.querySelector('.btn-add-photo-full').onclick = () => addPhotoToTaskDirectly(trip.id, trip.content, currentPhotoCount);
+                li.querySelector('.btn-edit').onclick = () => editTrip(trip.id, trip.date, trip.time, trip.content, trip.note);
+                li.querySelector('.btn-delete').onclick = () => deleteTrip(trip.id, trip.content);
                 tripList.appendChild(li);
             });
         }
@@ -888,10 +899,18 @@ HTML_TEMPLATE = r"""
                     if (task.time && `${task.date} ${task.time}` <= current && !task.reminded) {
                         task.reminded = true;
                         alert(`🔔 【提醒】${task.content}`);
-                        fetch(`${BASE_URL}/web-remind`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: task.date, time: task.time, content: task.content }) });
+                        fetch(`${BASE_URL}/web-remind`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: task.id }) });
                     }
                 });
-            }, 30000);
+            }, 10000);
+        }
+
+        function getSortedAndFilteredTrips() {
+            let result = [...allTasks];
+            result.sort((a, b) => new Date(`${a.date} ${a.time || "23:59"}`) - new Date(`${b.date} ${b.time || "23:59"}`));
+            const keyword = searchInput.value.trim();
+            if (keyword !== "") { result = result.filter(t => t.content.toLowerCase().includes(keyword.toLowerCase())); }
+            return result;
         }
 
         if (searchBtn) {
@@ -912,125 +931,155 @@ def index():
 
 @app.route('/api/tasks', methods=['GET', 'POST'])
 def handle_tasks():
-    if request.method == 'POST':
-        data = request.json or {}
-        tasks = storage.load_data()
-        tasks.append({
-            "date": data.get("date"),
-            "time": data.get("time", ""),
-            "content": data.get("content"),
-            "note": data.get("note", ""),
-            "reminded": False,
-            "photos": [],
-            "photo_notes": []
-        })
-        storage.save_data(tasks)
-        return jsonify({"status": "success"}), 200
-    else:
-        return jsonify(storage.load_data()), 200
+    try:
+        if request.method == 'POST':
+            data = request.json or {}
+            tasks = storage.load_data()
+            if not isinstance(tasks, list): tasks = []
+            tasks.append({
+                "id": str(uuid.uuid4()),  
+                "date": data.get("date"),
+                "time": data.get("time", ""),
+                "content": data.get("content"),
+                "note": data.get("note", ""),
+                "reminded": False,
+                "photos": [],
+                "photo_notes": []
+            })
+            storage.save_data(tasks)
+            return jsonify({"status": "success"}), 201
+        else:
+            tasks = storage.load_data()
+            return jsonify(tasks if isinstance(tasks, list) else []), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/web-delete', methods=['POST'])
 def web_delete():
-    data = request.json or {}
-    tasks = storage.load_data()
-    updated = [t for t in tasks if not (t.get("date") == data.get("date") and t.get("time") == data.get("time") and t.get("content") == data.get("content"))]
-    storage.save_data(updated)
-    return jsonify({"status": "success"}), 200
+    try:
+        data = request.json or {}
+        target_id = data.get("id")
+        tasks = storage.load_data() or []
+        updated = [t for t in tasks if t.get("id") != target_id]
+        storage.save_data(updated)
+        return jsonify({"status": "success"}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/web-edit', methods=['POST'])
 def web_edit():
-    data = request.json or {}
-    tasks = storage.load_data()
-    for t in tasks:
-        if t.get("date") == data.get("old_date") and t.get("time") == data.get("old_time") and t.get("content") == data.get("old_content"):
-            t["date"] = data.get("new_date")
-            t["time"] = data.get("new_time", "")
-            t["content"] = data.get("new_content")
-            t["note"] = data.get("new_note", "")
-            break
-    storage.save_data(tasks)
-    return jsonify({"status": "success"}), 200
+    try:
+        data = request.json or {}
+        target_id = data.get("id")
+        tasks = storage.load_data() or []
+        for t in tasks:
+            if t.get("id") == target_id:
+                t["date"] = data.get("new_date")
+                t["time"] = data.get("new_time", "")
+                t["content"] = data.get("new_content")
+                t["note"] = data.get("new_note", "")
+                break
+        storage.save_data(tasks)
+        return jsonify({"status": "success"}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/web-photo', methods=['POST'])
 def web_photo():
-    data = request.json or {}
-    tasks = storage.load_data()
-    for t in tasks:
-        if t.get("date") == data.get("date") and t.get("time") == data.get("time") and t.get("content") == data.get("content"):
-            if "photos" not in t: t["photos"] = []
-            if "photo_notes" not in t: t["photo_notes"] = []
-            
-            raw_path = data.get("path", "").strip()
-            clean_path = raw_path.replace('/', '\\')
-            
-            t["photos"].append(clean_path)
-            desc = data.get("desc", "").strip()
-            t["photo_notes"].append(desc if desc != "" else "無解說")
-            break
-    storage.save_data(tasks)
-    return jsonify({"status": "success"}), 200
+    try:
+        data = request.json or {}
+        target_id = data.get("id")
+        tasks = storage.load_data() or []
+        for t in tasks:
+            if t.get("id") == target_id:
+                if "photos" not in t: t["photos"] = []
+                if "photo_notes" not in t: t["photo_notes"] = []
+                
+                raw_path = data.get("path", "").strip()
+                clean_path = raw_path.replace('/', '\\')
+                
+                t["photos"].append(clean_path)
+                desc = data.get("desc", "").strip()
+                t["photo_notes"].append(desc if desc != "" else "無解說")
+                break
+        storage.save_data(tasks)
+        return jsonify({"status": "success"}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/web-photo-update', methods=['POST'])
 def web_photo_update():
-    data = request.json or {}
-    tasks = storage.load_data()
-    idx = data.get("photo_index")
-    for t in tasks:
-        if t.get("date") == data.get("date") and t.get("time") == data.get("time") and t.get("content") == data.get("content"):
-            if "photos" in t and idx < len(t["photos"]):
-                raw_path = data.get("new_path", "").strip()
-                t["photos"][idx] = raw_path.replace('/', '\\')
-            
-            if "photo_notes" not in t: t["photo_notes"] = ["無解說"] * len(t["photos"])
-            while len(t["photo_notes"]) < len(t["photos"]): t["photo_notes"].append("無解說")
+    try:
+        data = request.json or {}
+        target_id = data.get("id")
+        idx = data.get("photo_index")
+        tasks = storage.load_data() or []
+        for t in tasks:
+            if t.get("id") == target_id:
+                if "photos" in t and idx < len(t["photos"]):
+                    raw_path = data.get("new_path", "").strip()
+                    t["photos"][idx] = raw_path.replace('/', '\\')
                 
-            desc = data.get("new_desc", "").strip()
-            t["photo_notes"][idx] = desc if desc != "" else "無解說"
-            break
-    storage.save_data(tasks)
-    return jsonify({"status": "success"}), 200
+                if "photo_notes" not in t: t["photo_notes"] = ["無解說"] * len(t["photos"])
+                while len(t["photo_notes"]) < len(t["photos"]): t["photo_notes"].append("無解說")
+                    
+                desc = data.get("new_desc", "").strip()
+                t["photo_notes"][idx] = desc if desc != "" else "無解說"
+                break
+        storage.save_data(tasks)
+        return jsonify({"status": "success"}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/web-photo-delete', methods=['POST'])
 def web_photo_delete():
-    data = request.json or {}
-    tasks = storage.load_data()
-    idx = data.get("photo_index")
-    for t in tasks:
-        if t.get("date") == data.get("date") and t.get("time") == data.get("time") and t.get("content") == data.get("content"):
-            if "photos" in t and idx < len(t["photos"]): t["photos"].pop(idx)
-            if "photo_notes" in t and idx < len(t["photo_notes"]): t["photo_notes"].pop(idx)
-            break
-    storage.save_data(tasks)
-    return jsonify({"status": "success"}), 200
+    try:
+        data = request.json or {}
+        target_id = data.get("id")
+        idx = data.get("photo_index")
+        tasks = storage.load_data() or []
+        for t in tasks:
+            if t.get("id") == target_id:
+                if "photos" in t and idx < len(t["photos"]): t["photos"].pop(idx)
+                if "photo_notes" in t and idx < len(t["photo_notes"]): t["photo_notes"].pop(idx)
+                break
+        storage.save_data(tasks)
+        return jsonify({"status": "success"}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/view-photo', methods=['GET'])
 def view_photo():
     photo_path = request.args.get('path', '')
     photo_path = photo_path.strip('"').strip("'")
-    if os.path.exists(photo_path):
-        return send_file(photo_path)
+    if ".." in photo_path:
+        return jsonify({"error": "Access denied"}), 403
+    if os.path.exists(photo_path) and os.path.isfile(photo_path):
+        try: return send_file(photo_path)
+        except Exception as e: return jsonify({"error": str(e)}), 500
     return jsonify({"error": "File not found"}), 404
 
 @app.route('/api/web-remind', methods=['POST'])
 def web_remind():
     try:
         data = request.json or {}
-        tasks = storage.load_data()
+        target_id = data.get("id")
+        tasks = storage.load_data() or []
         for task in tasks:
-            if (str(task.get("date", "")) == data.get("date") and str(task.get("time", "")) == data.get("time") and str(task.get("content", "")) == data.get("content")):
+            if task.get("id") == target_id:
                 task["reminded"] = True
-                storage.save_data(tasks)
                 break
+        storage.save_data(tasks)
         return jsonify({"status": "success"}), 200
-    except Exception: 
-        return jsonify({"status": "success"}), 200
+    except Exception as e: 
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/monthly-review', methods=['GET'])
 def get_monthly_review():
     try:
         target_month = request.args.get('month', '').strip() 
         clean_target = target_month.replace("-", "") 
-        tasks = storage.load_data()
+        tasks = storage.load_data() or []
         filtered_tasks = []
         for task in tasks:
             clean_date = str(task.get("date", "")).replace("-", "") 
@@ -1041,4 +1090,9 @@ def get_monthly_review():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5001, debug=True)
+    print("=====================================================")
+    print("🌐 TIMETRO 自由清除提醒時間完全修復版啟動！")
+    print("🔗 核心機制：UUID 唯一識別身分驗證優化完成")
+    print("🔗 請開啟瀏覽器前往：http://127.0.0.1:5001")
+    print("=====================================================")
+    app.run(host='127.0.0.1', port=5001, debug=False)
