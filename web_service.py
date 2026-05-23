@@ -221,10 +221,92 @@ HTML_TEMPLATE = r"""
         .diary-card-combo.size-small { grid-column: span 1; flex-direction: column; }
         .diary-card-combo:hover { transform: scale(1.03) !important; z-index: 20; box-shadow: 0 12px 25px rgba(218, 165, 32, 0.22); }
 
+        /* ✨ 拍立得相框樣式 */
         .polaroid-card {
-            background: #ffffff; border-radius: 2px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); position: relative;
-            flex-shrink: 0; display: flex; flex-direction: column; align-items: center; border: 1px solid #f2f2f2;
+            background: #ffffff;
+            border-radius: 2px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            position: relative;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: 1px solid #f2f2f2;
             background-image: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+        }
+        
+        /* 大卡片中的拍立得固定寬度比例 */
+        .size-large .polaroid-card { 
+            width: 45%; 
+            padding: 10px 10px 32px 10px; 
+        }
+
+        /* 🔵 修正點：放寬最小化拍立得底部的留白(padding-bottom)，改用 54px 確保兩行文字有充足空間 */
+        .size-small .polaroid-card { 
+            width: 100%; 
+            padding: 6px 6px 54px 6px; 
+        }
+
+        .polaroid-card img {
+            width: 100%;
+            height: auto;
+            aspect-ratio: 1 / 1;
+            object-fit: cover;
+            background-color: #fcfcfc;
+            border: 1px solid rgba(0, 0, 0, 0.04);
+            display: block;
+        }
+        
+        /* 大圖下方的時間 (大卡片專用) */
+        .polaroid-footer-time {
+            position: absolute;
+            bottom: 6px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            font-size: 0.75em;
+            color: #8c8e99;
+        }
+
+        /* 大圖下方的標題 (大卡片專用) */
+        .large-title-footer {
+            margin-top: 8px;
+            font-size: 0.85em;
+            font-weight: bold;
+            color: #2e59d9;
+            text-align: center;
+            width: 100%;
+            border-bottom: 1px dashed #ced4da;
+            padding-bottom: 3px;
+        }
+
+        /* 🛠️ 修正點：重新編排小相片（無註解模式）底部的兩行文字區塊 */
+        .polaroid-footer-block-small {
+            position: absolute;
+            bottom: 6px;
+            left: 0;
+            width: 100%;
+            padding: 0 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            text-align: center;
+        }
+
+        /* 第一行：行程內容 (允許折行或字太多時呈現省略號) */
+        .small-footer-content {
+            font-size: 0.82em;
+            font-weight: bold;
+            color: #2e59d9;
+            width: 100%;
+            max-width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .size-large .polaroid-card { width: 45%; padding: 10px 10px 32px 10px; }
         .size-small .polaroid-card { width: 100%; padding: 6px 6px 54px 6px; }
@@ -834,7 +916,6 @@ HTML_TEMPLATE = r"""
         if (searchBtn) {
             searchBtn.addEventListener('click', displayTrips);
             clearBtn.addEventListener('click', () => { searchInput.value = ""; displayTrips(); });
-            searchInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') displayTrips(); });
         }
     </script>
 </body>
