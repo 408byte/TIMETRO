@@ -445,6 +445,13 @@ HTML_TEMPLATE = r"""
     </div>
 
     <script>
+    /** 
+    * ==========================================================
+    * 行程與日記管理系統核心邏輯
+    * ==========================================================
+    */
+    
+        // --- 1. 環境設定與 DOM 節點初始化 ---
         const BASE_URL = window.location.origin + "/api"; 
         const addTripForm = document.getElementById('addTripForm');
         const tripList = document.getElementById('tripList');
@@ -460,10 +467,15 @@ HTML_TEMPLATE = r"""
         let currentReviewMonth = '';
         const today = new Date();
 
+        // --- 2. 新增行程模組 ---
+        /**
+         * 負責處理行程表單的提交邏輯。
+         * 將使用者的輸入轉換為 JSON 物件，並發送至後端 API 進行持久化儲存。
+         */
         if (addTripForm) {
             addTripForm.addEventListener('submit', function (event) {
                 event.preventDefault();
-                const taskData = {
+                const taskData = {/* ...資料封裝... */
                     date: document.getElementById('date').value,
                     time: document.getElementById('time').value ? document.getElementById('time').value.trim() : "",
                     content: document.getElementById('content').value,
@@ -478,16 +490,27 @@ HTML_TEMPLATE = r"""
                 .then(() => {
                     alert("🎉 行程新增成功！");
                     addTripForm.reset();
-                    fetchTasks();
+                    fetchTasks();// 新增後立即觸發列表重整，保持 UI 與 DB 同步
                 });
             });
         }
 
+        /// --- 3. 視覺處理模組 ---
+        /**
+         * 隨機旋轉功能：
+         * 為日記方塊生成微小的傾斜角度（-1.5 到 1.5 度），
+         * 讓每一張生成的拍立得照片在視覺上看起來像隨意放置在桌上，增加手寫質感。
+         */
         function getRandomRotation() {
             const angles = [-1.5, -0.8, -0.4, 0.4, 0.8, 1.5];
             return angles[Math.floor(Math.random() * angles.length)];
         }
 
+        /**
+         * 路徑解析器：
+         * 檢查相片路徑是「外部 URL」還是「本機路徑」。
+         * 若為本機路徑，則自動拼接 API 路徑，確保圖片能正確顯示。
+         */
         function getPhotoUrl(path) {
             if (/^https?:\/\//i.test(path) || /^\/\//.test(path) || path.startsWith('data:')) {
                 return path;
@@ -495,7 +518,13 @@ HTML_TEMPLATE = r"""
             return `${BASE_URL}/view-photo?path=${encodeURIComponent(path)}`;
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
+        // --- 4. 月度回顧生成模組 ---
+        /**
+         * 初始化邏輯：
+         * 監聽頁面載入完成，設定日期預設值，並定義「生成回顧展」的完整執行緒。
+         * 包含：請求資料 -> 篩選圖片 -> 排序 -> 繪製 HTML -> 綁定下載事件。
+         */
+        document.addEventListener('DOMContentLoaded', () => {// ...初始化邏輯...
             const reviewMonthInput = document.getElementById('reviewMonthInput');
             const reviewBtn = document.getElementById('reviewBtn');
             const downloadReviewBtn = document.getElementById('downloadReviewBtn');
@@ -510,6 +539,7 @@ HTML_TEMPLATE = r"""
                     downloadReviewBtn.disabled = true;
                 });
 
+                // 生成回顧展：撈取資料 -> 篩選圖片 -> 繪製拍立得風格 HTML
                 reviewBtn.addEventListener('click', () => {
                     const selectedMonth = reviewMonthInput.value;
                     if (!selectedMonth) { alert("請選擇月份！"); return; }
@@ -518,6 +548,7 @@ HTML_TEMPLATE = r"""
                         .then(res => res.json())
                         .then(data => {
                             renderCalendarGrid(selectedMonth, data);
+                            // ... (後續渲染拍立得日記牆 HTML 的邏輯)
                             reviewList.innerHTML = "";
                             
                             const photoTrips = data.filter(trip => trip.photos && trip.photos.length > 0);
@@ -600,6 +631,7 @@ HTML_TEMPLATE = r"""
                         .catch(err => alert("讀取回顧失敗：" + err));
                 });
 
+                // 觸發截圖下載功能 (使用 html2canvas)
                 downloadReviewBtn.addEventListener('click', () => {
                     if (!currentReviewMonth || !reviewList.innerHTML.trim()) { alert('請先生成月度回顧展。'); return; }
                     downloadReviewImage(downloadFormatSelect.value || 'png');
@@ -610,6 +642,11 @@ HTML_TEMPLATE = r"""
             startReminderClock();
         });
 
+        // --- 5. 日曆檢視同步模組 ---
+        /**
+         * 此函式負責月份視圖的同步。
+         * 當使用者切換月份時，會向 API 請求該月份所有行程，並自動重繪行事曆格位。
+         */
         function updateCalendarViewOnly(yearMonthStr) {
             fetch(`${BASE_URL}/monthly-review?month=${yearMonthStr}`)
                 .then(res => res.json())
@@ -617,7 +654,13 @@ HTML_TEMPLATE = r"""
                 .catch(err => console.error("日曆渲染失敗:", err));
         }
 
-        function renderCalendarGrid(yearMonthStr, monthTasks) {
+        
+        /**
+         * 行事曆格位渲染器：
+         * 根據輸入的年、月，動態計算該月總天數與星期偏移量。
+         * 負責將 API 傳回的行程資料 (monthTasks) 對應到正確的日期格位中。
+         */
+        function renderCalendarGrid(yearMonthStr, monthTasks) {// ...繪製日期網格與行程小點邏輯...
             const grid = document.getElementById('calendarGrid');
             const title = document.getElementById('calendarTitle');
             if (!grid) return;
@@ -667,7 +710,13 @@ HTML_TEMPLATE = r"""
             }
         }
 
-        function downloadReviewImage(format) {
+        // --- 6. 匯出模組 ---
+        /**
+         * 圖片匯出工具：
+         * 檢查是否已載入 html2canvas，若無則動態載入。
+         * 將日記牆 HTML 容器轉換為 Base64 圖片並觸發瀏覽器下載行為。
+         */
+        function downloadReviewImage(format) {// ...Canvas 繪圖與檔案儲存邏輯...
             if (typeof html2canvas !== 'function') {
                 const script = document.createElement('script');
                 script.src = 'https://html2canvas.hertzen.com/dist/html2canvas.min.js';
@@ -691,17 +740,27 @@ HTML_TEMPLATE = r"""
             .finally(() => { downloadReviewBtn.disabled = false; downloadReviewBtn.textContent = originalText; });
         }
 
+        // --- 7. 資料管理模組 (CRUD) ---
+        /**
+         * 行程資料同步器：
+         * 作為系統的「總開關」，從後端撈取全量資料後，觸發列表重整與日曆重繪。
+         */
         function fetchTasks() {
             fetch(`${BASE_URL}/tasks`)
                 .then(res => res.json())
                 .then(data => { 
                     allTasks = data; 
                     displayTrips(); 
+                    // 若當前在日曆頁面，同步更新日曆
                     const rmInput = document.getElementById('reviewMonthInput');
                     if (rmInput && rmInput.value) { updateCalendarViewOnly(rmInput.value); }
                 });
         }
 
+        /**
+         * 圖片新增與編輯/刪除系列函式：
+         * 處理與圖片資源相關的 CRUD，每個函式都確保在執行後能同步更新 UI 顯示。
+         */
         function addPhotoToTaskDirectly(taskId, taskContent, currentPhotoCount) {
             if (currentPhotoCount >= 10) {
                 alert(`❌ 無法新增！【${taskContent}】相片已達 10 筆上限！`);
@@ -726,6 +785,11 @@ HTML_TEMPLATE = r"""
             .catch(err => alert("❌ 連線錯誤：" + err.message));
         }
 
+        /**
+         * 資料維護與同步控制模組：
+         * 負責執行系統的增刪操作（CRUD），並透過自動同步機制確保
+         * 行程列表、日曆與回顧展的顯示內容與資料庫完全一致。
+         */
         function deleteTrip(taskId, taskContent) {
             if (confirm(`⚠️ 確定要刪除行程【${taskContent}】嗎？`)) {
                 fetch(`${BASE_URL}/web-delete`, {
@@ -743,6 +807,10 @@ HTML_TEMPLATE = r"""
             }
         }
 
+        /**
+         * 圖片新增與編輯/刪除系列函式：
+         * 處理與圖片資源相關的 CRUD，每個函式都確保在執行後能同步更新 UI 顯示。
+         */
         function editTrip(taskId, date, time, content, note) {
             document.getElementById('editTaskId').value = taskId;
             document.getElementById('editDate').value = date; 
@@ -753,8 +821,17 @@ HTML_TEMPLATE = r"""
             editModal.style.display = 'flex';
         }
 
+        // --- 行程內容編輯模組 ---
+        /**
+         * 關閉編輯視窗：將 CSS 顯示狀態設為隱藏。
+         */
         function closeEditModal() { editModal.style.display = 'none'; }
 
+        /**
+         * 處理行程編輯提交：
+         * 攔截表單，將畫面上的新資料（日期、時間、內容、備註）打包成 JSON，
+         * 發送至後端進行資料更新。成功後自動重新整理列表並關閉視窗。
+         */
         editTripForm.addEventListener('submit', function(event) {
             event.preventDefault();
             fetch(`${BASE_URL}/web-edit`, {
@@ -771,12 +848,20 @@ HTML_TEMPLATE = r"""
             .then(res => res.json())
             .then(data => {
                 if (data.status === "success") {
-                    alert("📝 行程內容已成功更新！"); closeEditModal(); fetchTasks();
+                    alert("📝 行程內容已成功更新！"); 
+                    closeEditModal(); 
+                    fetchTasks();// 強制重新整理行程列表
+                    // 若目前在「回顧展模式」，則強制重刷該月份，確保變更即時反應
                     if (document.getElementById('reviewList').style.display === 'block') { document.getElementById('reviewBtn').click(); }
                 }
             });
         });
 
+        // --- 照片說明編輯模組 ---
+        /**
+         * 開啟相片說明編輯視窗：
+         * 將點選到的相片資訊（所屬行程 ID、圖片索引、原路徑與說明）填入編輯表單。
+         */
         function openPhotoEditModalDirectly(taskId, index, path, desc) {
             document.getElementById('photoTripId').value = taskId;
             document.getElementById('photoIndex').value = index;
@@ -785,8 +870,16 @@ HTML_TEMPLATE = r"""
             photoEditModal.style.display = 'flex';
         }
 
+        /**
+         * 關閉相片編輯視窗：恢復視窗的隱藏狀態。
+        */
         function closePhotoEditModal() { photoEditModal.style.display = 'none'; }
 
+        /**
+         * 處理相片更新提交：
+         * 將修改後的相片描述發送到後端 `/web-photo-update` API。
+         * 此處處理的是「細部單張圖片」的資料修補。
+         */
         photoEditForm.addEventListener('submit', function(e) {
             e.preventDefault();
             fetch(`${BASE_URL}/web-photo-update`, {
@@ -802,12 +895,19 @@ HTML_TEMPLATE = r"""
             .then(res => res.json())
             .then(data => {
                 if(data.status === "success") {
-                    alert("🖼️ 相片與解說已成功更新！"); closePhotoEditModal(); fetchTasks();
+                    alert("🖼️ 相片與解說已成功更新！"); 
+                    closePhotoEditModal(); 
+                    fetchTasks();// 重新整理 UI 顯示
+                    // 同樣確保若使用者在回顧模式下，編輯結果能即時同步
                     if (document.getElementById('reviewList').style.display === 'block') { document.getElementById('reviewBtn').click(); }
                 }
             });
         });
 
+        /**
+         * 圖片新增與編輯/刪除系列函式：
+         * 處理與圖片資源相關的 CRUD，每個函式都確保在執行後能同步更新 UI 顯示。
+         */
         function fireDeleteSinglePhoto(taskId, index) {
             if(confirm("⚠️ 確定要移除這張相片與其文字解說嗎？")) {
                 fetch(`${BASE_URL}/web-photo-delete`, {
@@ -825,6 +925,12 @@ HTML_TEMPLATE = r"""
             }
         }
 
+        // --- 8. 列表渲染模組 ---
+        /**
+         * 主清單繪製器：
+         * 執行過濾 (Search) 與 排序 (Date) 後，遍歷所有任務產生清單 HTML。
+         * 這是使用者介面的核心，動態組裝圖片 Grid 與操作按鈕。
+         */
         function displayTrips() {
             tripList.innerHTML = "";
             let result = [...allTasks];
@@ -891,6 +997,12 @@ HTML_TEMPLATE = r"""
             });
         }
 
+        // --- 9. 自動化任務模組 ---
+        /**
+         * 背景提醒鬧鐘：
+         * 使用輪詢 (Polling) 機制，每 10 秒將「當前時間」與「任務設定時間」比對。
+         * 若吻合則觸發瀏覽器 Alert，並通知後端該任務已提醒，避免重複通知。
+         */
         function startReminderClock() {
             setInterval(() => {
                 const now = new Date();
@@ -905,16 +1017,39 @@ HTML_TEMPLATE = r"""
             }, 10000);
         }
 
+        /**
+         * ==========================================================
+         * 資料處理模組：排序與搜尋引擎
+         * ==========================================================
+         */
+
+        /**
+         * 處理資料邏輯：排序與篩選
+         * 1. 排序 (Sort)：將所有的行程依據「日期+時間」由舊到新排序。
+         *    若行程未設定時間，則預設為 "23:59"（確保當日晚間的行程會排在最後）。
+         * 2. 篩選 (Filter)：若搜尋框有輸入關鍵字，則進行不區分大小寫的模糊比對，
+         *    只回傳符合內容的行程。
+         * @returns {Array} 處理過後的行程陣列
+         */
         function getSortedAndFilteredTrips() {
+            // 使用解構賦值 [...allTasks] 複製一份資料，避免直接更動原始的全域變數
             let result = [...allTasks];
+            // 依據日期與時間進行升冪排序
             result.sort((a, b) => new Date(`${a.date} ${a.time || "23:59"}`) - new Date(`${b.date} ${b.time || "23:59"}`));
+            // 若搜尋列有內容，進行過濾
             const keyword = searchInput.value.trim();
             if (keyword !== "") { result = result.filter(t => t.content.toLowerCase().includes(keyword.toLowerCase())); }
             return result;
         }
 
+        /**
+         * --- 搜尋介面事件綁定 ---
+         * 當使用者點擊「搜尋」或「清除」按鈕時，觸發畫面的重新渲染。
+         */
         if (searchBtn) {
+            // 執行搜尋：呼叫 displayTrips (此函式內部會呼叫 getSortedAndFilteredTrips)
             searchBtn.addEventListener('click', displayTrips);
+            // 清除搜尋：清空輸入框並還原顯示所有行程
             clearBtn.addEventListener('click', () => { searchInput.value = ""; displayTrips(); });
         }
     </script>
